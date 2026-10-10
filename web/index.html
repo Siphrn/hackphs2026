@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#09110e">
+  <title>SkyTrace Flight Lab</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #09110e;
+      --panel: #111b17;
+      --panel-soft: #17241e;
+      --text: #eef8f2;
+      --muted: #96aaa0;
+      --line: #293b33;
+      --green: #55e692;
+      --yellow: #ffdc52;
+      --blue: #62cbff;
+      --red: #ff7878;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 18% 0%, rgba(63, 151, 105, .14), transparent 32rem),
+        var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    button, input { font: inherit; }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 16px clamp(16px, 3vw, 34px);
+      background: rgba(9, 17, 14, .88);
+      border-bottom: 1px solid var(--line);
+      backdrop-filter: blur(18px);
+    }
+
+    .brand, .connection, .legend, .instruction {
+      display: flex;
+      align-items: center;
+    }
+
+    .brand { gap: 12px; }
+
+    .brand-mark {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      border-radius: 11px;
+      background: var(--panel-soft);
+      color: var(--green);
+      font-size: 20px;
+      transform: rotate(-12deg);
+    }
+
+    .brand-name { font-weight: 700; letter-spacing: -.02em; }
+    .brand-subtitle, .eyebrow, .label, .supporting { color: var(--muted); }
+    .brand-subtitle { margin-top: 2px; font-size: 12px; }
+
+    .connection {
+      gap: 8px;
+      color: var(--green);
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .connection.offline { color: var(--red); }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 15%, transparent); }
+
+    main {
+      width: min(1440px, 100%);
+      margin: 0 auto;
+      padding: clamp(14px, 2.5vw, 28px);
+    }
+
+    .hero {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 18px;
+    }
+
+    .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .12em; }
+    h1 { margin: 5px 0 0; font-size: clamp(25px, 4vw, 42px); line-height: 1.05; letter-spacing: -.04em; }
+
+    .instruction {
+      gap: 9px;
+      padding: 9px 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--panel);
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    kbd {
+      padding: 3px 7px;
+      border: 1px solid #455c51;
+      border-bottom-width: 2px;
+      border-radius: 6px;
+      background: var(--panel-soft);
+      color: var(--text);
+      font-family: inherit;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .card {
+      background: linear-gradient(145deg, rgba(255,255,255,.018), transparent 55%), var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+    }
+
+    .metric { padding: 14px 16px; }
+    .label { font-size: 12px; }
+    .value { margin-top: 5px; font-size: clamp(22px, 3.2vw, 31px); font-weight: 700; letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
+    .unit { margin-left: 4px; color: var(--muted); font-size: 13px; font-weight: 500; }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(0, 1.8fr) minmax(260px, .72fr);
+      gap: 14px;
+    }
+
+    .flight-card { padding: 15px; min-width: 0; }
+
+    .card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 12px;
+    }
+
+    .card-title { margin-top: 4px; font-size: 17px; font-weight: 700; }
+    .legend { flex-wrap: wrap; justify-content: flex-end; gap: 14px; color: var(--muted); font-size: 12px; }
+    .legend span { display: inline-flex; align-items: center; gap: 6px; }
+    .key { display: inline-block; width: 23px; height: 3px; border-radius: 10px; background: var(--yellow); }
+    .key.predicted { background: repeating-linear-gradient(90deg, var(--blue) 0 6px, transparent 6px 10px); }
+
+    .plot-wrap {
+      position: relative;
+      overflow: hidden;
+      aspect-ratio: 4 / 3;
+      min-height: 330px;
+      border-radius: 10px;
+      background:
+        linear-gradient(rgba(41,59,51,.62) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(41,59,51,.62) 1px, transparent 1px),
+        var(--panel-soft);
+      background-size: 12.5% 25%;
+    }
+
+    #trajectory-svg { width: 100%; height: 100%; display: block; }
+    #observed-line { fill: none; stroke: var(--yellow); stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
+    #predicted-line { fill: none; stroke: var(--blue); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 10 9; }
+    #current-marker { fill: var(--yellow); stroke: var(--panel); stroke-width: 5; }
+    #landing-zone { fill: rgba(98, 203, 255, .18); stroke: var(--blue); stroke-width: 2; }
+    #ground-line { stroke: var(--muted); stroke-width: 2; opacity: .8; }
+    .axis-label { fill: var(--muted); font-size: 13px; }
+
+    .empty-state {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-content: center;
+      gap: 7px;
+      text-align: center;
+      pointer-events: none;
+    }
+
+    .empty-state strong { font-size: 18px; }
+    .empty-state span { color: var(--muted); font-size: 13px; }
+    .empty-state.hidden { display: none; }
+
+    .prediction { padding: 17px; }
+    .prediction h2 { margin: 5px 0 18px; font-size: 20px; letter-spacing: -.02em; }
+
+    .pred-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .pred-row:last-of-type { border-bottom: 0; }
+    .pred-row span { color: var(--muted); font-size: 13px; }
+    .pred-row strong { font-size: 14px; text-align: right; font-variant-numeric: tabular-nums; }
+
+    .confidence { margin-top: 19px; }
+    .confidence-head { display: flex; justify-content: space-between; margin-bottom: 8px; color: var(--muted); font-size: 12px; }
+    .track { height: 7px; overflow: hidden; border-radius: 99px; background: var(--panel-soft); }
+    .fill { height: 100%; width: 0; border-radius: inherit; background: var(--green); transition: width .2s ease; }
+
+    .status-banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-top: 14px;
+      padding: 12px 15px;
+    }
+
+    .status-main { display: flex; align-items: center; gap: 10px; }
+    .status-pill { padding: 5px 9px; border-radius: 99px; background: rgba(85, 230, 146, .12); color: var(--green); font-size: 12px; font-weight: 800; letter-spacing: .06em; }
+    .status-pill.flying { background: rgba(255, 220, 82, .13); color: var(--yellow); }
+    .status-pill.complete { background: rgba(98, 203, 255, .13); color: var(--blue); }
+    .supporting { font-size: 12px; }
+
+    @media (max-width: 800px) {
+      .hero { align-items: flex-start; flex-direction: column; }
+      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .workspace { grid-template-columns: 1fr; }
+      .plot-wrap { min-height: 270px; }
+    }
+
+    @media (max-width: 480px) {
+      .topbar { align-items: flex-start; }
+      .brand-subtitle { display: none; }
+      .connection { margin-top: 9px; }
+      .instruction { white-space: normal; }
+      .metrics { gap: 8px; }
+      .metric { padding: 12px; }
+      .card-head { align-items: flex-start; flex-direction: column; }
+      .legend { justify-content: flex-start; }
+      .plot-wrap { min-height: 220px; }
+      .status-banner { align-items: flex-start; flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">➤</div>
+      <div>
+        <div class="brand-name">SkyTrace</div>
+        <div class="brand-subtitle">Paper airplane flight lab</div>
+      </div>
+    </div>
+    <div id="connection" class="connection offline"><span class="dot"></span><span>Connecting…</span></div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div>
+        <div class="eyebrow">LIVE FLIGHT ANALYSIS</div>
+        <h1>Trajectory and landing forecast</h1>
+      </div>
+      <div class="instruction"><kbd>Space</kbd><span>Arm the next throw in the OpenCV window</span></div>
+    </section>
+
+    <section class="metrics" aria-label="Flight measurements">
+      <article class="card metric"><div class="label">Flight score</div><div class="value"><span id="score">0</span><span class="unit">/100</span></div></article>
+      <article class="card metric"><div class="label">Airtime</div><div class="value"><span id="airtime">0.00</span><span class="unit">s</span></div></article>
+      <article class="card metric"><div id="speed-label" class="label">Current speed</div><div class="value"><span id="speed">0</span><span class="unit">px/s</span></div></article>
+      <article class="card metric"><div class="label">Flight angle</div><div class="value"><span id="angle">0</span><span class="unit">°</span></div></article>
+    </section>
+
+    <section class="workspace">
+      <article class="card flight-card">
+        <div class="card-head">
+          <div><div class="eyebrow">CAMERA VIEW</div><div class="card-title">Observed and predicted path</div></div>
+          <div class="legend"><span><i class="key"></i>Observed</span><span><i class="key predicted"></i>Predicted</span></div>
+        </div>
+        <div id="plot-wrap" class="plot-wrap">
+          <svg id="trajectory-svg" viewBox="0 0 640 480" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Live paper airplane trajectory">
+            <line id="ground-line" x1="0" y1="432" x2="640" y2="432"></line>
+            <polyline id="observed-line" points=""></polyline>
+            <polyline id="predicted-line" points=""></polyline>
+            <ellipse id="landing-zone" cx="0" cy="432" rx="0" ry="11"></ellipse>
+            <circle id="current-marker" cx="0" cy="0" r="0"></circle>
+            <text id="launch-label" class="axis-label" text-anchor="middle">Launch</text>
+            <text id="landing-label" class="axis-label" text-anchor="middle">Landing</text>
+          </svg>
+          <div id="empty-state" class="empty-state"><strong>Waiting for a flight</strong><span>Arm the tracker, then throw the yellow airplane.</span></div>
+        </div>
+      </article>
+
+      <aside class="card prediction">
+        <div class="eyebrow">PREDICTED OUTCOME</div>
+        <h2>Live forecast</h2>
+        <div class="pred-row"><span>Remaining airtime</span><strong id="remaining">0.00 s</strong></div>
+        <div class="pred-row"><span>Projected distance</span><strong id="projected-distance">0 px</strong></div>
+        <div class="pred-row"><span>Landing position</span><strong id="landing-position">—</strong></div>
+        <div class="pred-row"><span>Flight smoothness</span><strong id="smoothness">0%</strong></div>
+        <div class="confidence">
+          <div class="confidence-head"><span>Prediction confidence</span><span id="confidence-label">0%</span></div>
+          <div class="track"><div id="confidence-fill" class="fill"></div></div>
+        </div>
+      </aside>
+    </section>
+
+    <section class="card status-banner" aria-live="polite">
+      <div class="status-main"><span id="status-pill" class="status-pill">READY</span><span id="status-copy">Press Space in the tracker to arm a flight.</span></div>
+      <div id="last-update" class="supporting">No data yet</div>
+    </section>
+  </main>
+
+  <script>
+    const byId = (id) => document.getElementById(id);
+    const connection = byId("connection");
+    const svg = byId("trajectory-svg");
+    let failures = 0;
+
+    function number(value, fallback = 0) {
+      const result = Number(value);
+      return Number.isFinite(result) ? result : fallback;
+    }
+
+    function pointsString(points) {
+      return Array.isArray(points)
+        ? points.map((point) => `${number(point[0])},${number(point[1])}`).join(" ")
+        : "";
+    }
+
+    function setConnection(online) {
+      connection.classList.toggle("offline", !online);
+      connection.querySelector("span:last-child").textContent = online
+        ? "OpenCV connected"
+        : "Tracker disconnected";
+    }
+
+    function render(data) {
+      const width = Math.max(1, number(data.frame_width, 640));
+      const height = Math.max(1, number(data.frame_height, 480));
+      const groundY = height * 0.9;
+      const trajectory = Array.isArray(data.trajectory) ? data.trajectory : [];
+      const prediction = Array.isArray(data.prediction) ? data.prediction : [];
+
+      svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+      byId("plot-wrap").style.aspectRatio = `${width} / ${height}`;
+      byId("ground-line").setAttribute("x2", width);
+      byId("ground-line").setAttribute("y1", groundY);
+      byId("ground-line").setAttribute("y2", groundY);
+      byId("observed-line").setAttribute("points", pointsString(trajectory));
+      byId("predicted-line").setAttribute("points", pointsString(prediction));
+
+      const current = trajectory.at(-1);
+      const marker = byId("current-marker");
+      marker.setAttribute("cx", current ? number(current[0]) : 0);
+      marker.setAttribute("cy", current ? number(current[1]) : 0);
+      marker.setAttribute("r", current ? Math.max(6, width * .009) : 0);
+
+      const landingX = data.landing_x === null ? null : number(data.landing_x);
+      const confidence = Math.round(number(data.prediction_confidence));
+      const landingZone = byId("landing-zone");
+      landingZone.setAttribute("cx", landingX ?? 0);
+      landingZone.setAttribute("cy", groundY);
+      landingZone.setAttribute("rx", landingX === null ? 0 : Math.max(width * .025, (100 - confidence) * width * .0025));
+      landingZone.setAttribute("ry", Math.max(8, height * .018));
+
+      const labelPadding = width * .045;
+      const labelY = Math.min(height - 10, groundY + Math.max(20, height * .045));
+      const launchX = trajectory.length
+        ? Math.max(labelPadding, Math.min(width - labelPadding, number(trajectory[0][0])))
+        : labelPadding;
+      const displayedLandingX = landingX === null ? width - labelPadding : landingX;
+      const clampedLandingX = Math.max(labelPadding, Math.min(width - labelPadding, displayedLandingX));
+      const labelSize = Math.max(13, Math.min(32, width * .018));
+      const launchLabel = byId("launch-label");
+      const landingLabel = byId("landing-label");
+      launchLabel.setAttribute("x", launchX);
+      launchLabel.setAttribute("y", labelY);
+      landingLabel.setAttribute("x", clampedLandingX);
+      landingLabel.setAttribute("y", labelY);
+      launchLabel.style.fontSize = `${labelSize}px`;
+      landingLabel.style.fontSize = `${labelSize}px`;
+
+      byId("empty-state").classList.toggle("hidden", trajectory.length > 1);
+      byId("score").textContent = Math.round(number(data.score));
+      byId("airtime").textContent = number(data.airtime).toFixed(2);
+      byId("speed").textContent = Math.round(number(data.speed));
+      byId("angle").textContent = Math.round(number(data.angle));
+      byId("remaining").textContent = `${number(data.remaining_airtime).toFixed(2)} s`;
+      byId("projected-distance").textContent = `${Math.round(number(data.projected_distance))} px`;
+      byId("landing-position").textContent = landingX === null ? "—" : `${Math.round(landingX)} px`;
+      byId("smoothness").textContent = `${Math.round(number(data.smoothness) * 100)}%`;
+      byId("confidence-label").textContent = `${confidence}%`;
+      byId("confidence-fill").style.width = `${Math.max(0, Math.min(100, confidence))}%`;
+
+      const status = String(data.status || "READY").toUpperCase();
+      const statusPill = byId("status-pill");
+      statusPill.textContent = status;
+      statusPill.classList.toggle("flying", status === "FLYING");
+      statusPill.classList.toggle("complete", status === "COMPLETE");
+      byId("speed-label").textContent = status === "COMPLETE" ? "Final speed" : "Current speed";
+      byId("status-copy").textContent = status === "FLYING"
+        ? "Tracking the airplane and updating the landing forecast."
+        : status === "ARMED"
+          ? "Tracker armed—throw the airplane through the camera view."
+          : status === "COMPLETE"
+            ? "Flight complete—the graph is frozen. Press Space to arm the next throw."
+            : "Press Space in the tracker to arm a flight.";
+      byId("last-update").textContent = `Updated ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })}`;
+    }
+
+    async function refresh() {
+      try {
+        const response = await fetch("/api/state", { cache: "no-store" });
+        if (!response.ok) throw new Error("Dashboard API unavailable");
+        render(await response.json());
+        failures = 0;
+        setConnection(true);
+      } catch (error) {
+        failures += 1;
+        if (failures > 2) setConnection(false);
+      }
+    }
+
+    refresh();
+    setInterval(refresh, 100);
+  </script>
+</body>
+</html>

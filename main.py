@@ -1,10 +1,14 @@
 import cv2
 import numpy as np
+from collections import deque
 
 camera = cv2.VideoCapture(0)
 
 if not camera.isOpened():
     raise RuntimeError("Could not open the webcam")
+
+
+trajectory = deque(maxlen=150)
 
 while True:
     success, frame = camera.read()
@@ -42,6 +46,7 @@ while True:
         if area > 500:
             (x, y), radius = cv2.minEnclosingCircle(largest_contour)
             center = (int(x), int(y))
+            trajectory.appendleft(center)
 
             cv2.circle(frame, center, int(radius), (0, 0, 255), 3)
             cv2.circle(frame, center, 5, (255, 0, 0), -1)
@@ -56,11 +61,29 @@ while True:
                 2,
             )
 
+    for index in range(1, len(trajectory)):
+        previous_point = trajectory[index - 1]
+        current_point = trajectory[index]
+
+        thickness = max(1, int(6 * (1 - index / len(trajectory))))
+
+        cv2.line(
+            frame,
+            previous_point,
+            current_point,
+            (255, 0, 255),
+            thickness,
+        )
+
     cv2.imshow("Paper Plane Tracker", frame)
     cv2.imshow("Detection Mask", mask)
 
-    if cv2.waitKey(1) & 0xFF == ord("q"):
+    key = cv2.waitKey(1) & 0xFF
+
+    if key == ord("q"):
         break
+    elif key == ord("c"):
+        trajectory.clear()
 
 camera.release()
 cv2.destroyAllWindows()

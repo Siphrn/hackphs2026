@@ -10,6 +10,7 @@ if not camera.isOpened():
 
 
 trajectory = deque(maxlen=150)
+recent_centers = deque(maxlen=5)
 
 flight_armed = False
 flight_started = False
@@ -20,6 +21,7 @@ last_seen_time = None
 
 last_airtime = 0
 last_distance = 0
+last_horizontal_distance = 0
 
 while True:
     success, frame = camera.read()
@@ -27,15 +29,16 @@ while True:
     if not success:
         break
 
+    frame = cv2.flip(frame, 1)
+
     # Convert the camera image into HSV color space.
     hsv_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
-    # Starting range for bright green.
-    lower_green = np.array([35, 80, 80])
-    upper_green = np.array([85, 255, 255])
+    # Starting range for light blue.
+    lower_blue = np.array([85, 60, 40])
+    upper_blue = np.array([120, 255, 255])
 
-    # White pixels represent detected green areas.
-    mask = cv2.inRange(hsv_frame, lower_green, upper_green)
+    mask = cv2.inRange(hsv_frame, lower_blue, upper_blue)
 
     # Remove small specks of noise.
     kernel = np.ones((5, 5), np.uint8)
@@ -56,7 +59,17 @@ while True:
         # Ignore very small detections.
         if area > 500:
             (x, y), radius = cv2.minEnclosingCircle(largest_contour)
-            center = (int(x), int(y))
+            raw_center = (int(x), int(y))
+            recent_centers.append(raw_center)
+
+            smoothed_x = int(
+                sum(point[0] for point in recent_centers) / len(recent_centers)
+            )
+            smoothed_y = int(
+                sum(point[1] for point in recent_centers) / len(recent_centers)
+            )
+
+            center = (smoothed_x, smoothed_y)
             trajectory.appendleft(center)
 
             current_time = time.perf_counter()
@@ -115,8 +128,14 @@ while True:
             segment_distance = ((x2 - x1) ** 2 + (y2 - y1) ** 2) ** 0.5
             last_distance += segment_distance
 
+            if len(flight_points) >= 2:
+                starting_x = flight_points[0][0]
+                ending_x = flight_points[-1][0]
+                last_horizontal_distance = abs(ending_x - starting_x)
+
         print(f"Airtime: {last_airtime:.2f} seconds")
-        print(f"Tracked distance: {last_distance:.0f} pixels")
+        print(f"Path length: {last_distance:.0f} pixels")
+        print(f"Horizontal distance: {last_horizontal_distance} pixels")
 
         if flight_started:
             status = "FLYING"
@@ -156,12 +175,15 @@ while True:
 
     elif key == ord("c"):
         trajectory.clear()
+        recent_centers.clear()
 
     elif key == ord(" "):
         flight_armed = True
         flight_started = False
+
         flight_points.clear()
         trajectory.clear()
+        recent_centers.clear()  # Clear smoothing from the previous flight
 
         flight_start_time = None
         last_seen_time = None

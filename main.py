@@ -1,3 +1,6 @@
+import time
+from collections import deque
+
 import cv2
 import numpy as np
 
@@ -5,6 +8,11 @@ camera = cv2.VideoCapture(0)
 
 if not camera.isOpened():
     raise RuntimeError("Could not open the webcam")
+
+# Every detection gets remembered as (timestamp, (x, y), radius) so we can
+# draw the trail and later work out how long the plane was in the air.
+MAX_HISTORY = 120
+track_history = deque(maxlen=MAX_HISTORY)
 
 while True:
     success, frame = camera.read()
@@ -42,6 +50,7 @@ while True:
         if area > 500:
             (x, y), radius = cv2.minEnclosingCircle(largest_contour)
             center = (int(x), int(y))
+            track_history.append((time.time(), center, radius))
 
             cv2.circle(frame, center, int(radius), (0, 0, 255), 3)
             cv2.circle(frame, center, 5, (255, 0, 0), -1)
@@ -55,6 +64,12 @@ while True:
                 (0, 255, 0),
                 2,
             )
+
+    # Draw the trail of recent positions, fading out the older ones.
+    points = [p for _, p, _ in track_history]
+    for i in range(1, len(points)):
+        thickness = max(1, int(6 * i / len(points)))
+        cv2.line(frame, points[i - 1], points[i], (0, 200, 255), thickness)
 
     cv2.imshow("Paper Plane Tracker", frame)
     cv2.imshow("Detection Mask", mask)

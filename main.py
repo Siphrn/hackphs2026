@@ -1,3 +1,4 @@
+import time
 import cv2
 import numpy as np
 from collections import deque
@@ -9,6 +10,16 @@ if not camera.isOpened():
 
 
 trajectory = deque(maxlen=150)
+
+flight_armed = False
+flight_started = False
+
+flight_points = []
+flight_start_time = None
+last_seen_time = None
+
+last_airtime = 0
+last_distance = 0
 
 while True:
     success, frame = camera.read()
@@ -48,6 +59,17 @@ while True:
             center = (int(x), int(y))
             trajectory.appendleft(center)
 
+            current_time = time.perf_counter()
+
+            if flight_armed:
+                if not flight_started:
+                    flight_started = True
+                    flight_start_time = current_time
+                    print("Flight started!")
+
+                flight_points.append(center)
+                last_seen_time = current_time
+
             cv2.circle(frame, center, int(radius), (0, 0, 255), 3)
             cv2.circle(frame, center, 5, (255, 0, 0), -1)
 
@@ -74,6 +96,55 @@ while True:
             (255, 0, 255),
             thickness,
         )
+    current_time = time.perf_counter()
+
+    if (
+        flight_started
+        and last_seen_time is not None
+        and current_time - last_seen_time > 0.5
+    ):
+        last_airtime = last_seen_time - flight_start_time
+
+        # Calculates total movment across image in pixels
+        last_distance = 0
+
+        for index in range(1, len(flight_points)):
+            x1, y1 = flight_points[index - 1]
+            x2, y2 = flight_points[index]
+
+            segment_distance = ((x2 - x1) ** 2 + (y2 - y1) ** 2) ** 0.5
+            last_distance += segment_distance
+
+        print(f"Airtime: {last_airtime:.2f} seconds")
+        print(f"Tracked distance: {last_distance:.0f} pixels")
+
+        if flight_started:
+            status = "FLYING"
+        elif flight_armed:
+            status = "ARMED"
+        else:
+            status = "Press SPACE to arm"
+
+        cv2.putText(
+            frame,
+            status,
+            (20, 75),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (0, 255, 255),
+            2,
+        )
+
+        cv2.putText(
+            frame,
+            f"Last flight: {last_airtime:.2f}s | {last_distance:.0f}px",
+            (20, 110),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (255, 255, 255),
+            2,
+        )  
+
 
     cv2.imshow("Paper Plane Tracker", frame)
     cv2.imshow("Detection Mask", mask)
@@ -82,8 +153,20 @@ while True:
 
     if key == ord("q"):
         break
+
     elif key == ord("c"):
         trajectory.clear()
+
+    elif key == ord(" "):
+        flight_armed = True
+        flight_started = False
+        flight_points.clear()
+        trajectory.clear()
+
+        flight_start_time = None
+        last_seen_time = None
+
+        print("Flight armed. Throw the plane!")
 
 camera.release()
 cv2.destroyAllWindows()

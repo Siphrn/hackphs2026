@@ -2,12 +2,15 @@ import time
 import cv2
 import numpy as np
 from collections import deque
+import serial
 
 camera = cv2.VideoCapture(0)
 
 if not camera.isOpened():
     raise RuntimeError("Could not open the webcam")
 
+arduino = serial.Serial("/dev/cu.usbmodem3101", 9600)
+time.sleep(2)
 
 trajectory = deque(maxlen=150)
 recent_centers = deque(maxlen=5)
@@ -23,6 +26,9 @@ last_airtime = 0
 last_distance = 0
 last_horizontal_distance = 0
 
+last_score = 0
+last_smoothness = 0
+
 while True:
     success, frame = camera.read()
 
@@ -34,11 +40,10 @@ while True:
     # Convert the camera image into HSV color space.
     hsv_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
-    # Starting range for light blue.
-    lower_blue = np.array([85, 60, 40])
-    upper_blue = np.array([120, 255, 255])
+    lower_yellow = np.array([20, 100, 120])
+    upper_yellow = np.array([40, 255, 255])
 
-    mask = cv2.inRange(hsv_frame, lower_blue, upper_blue)
+    mask = cv2.inRange(hsv_frame, lower_yellow, upper_yellow)
 
     # Remove small specks of noise.
     kernel = np.ones((5, 5), np.uint8)
@@ -57,7 +62,7 @@ while True:
         area = cv2.contourArea(largest_contour)
 
         # Ignore very small detections.
-        if area > 500:
+        if area > 100:
             (x, y), radius = cv2.minEnclosingCircle(largest_contour)
             raw_center = (int(x), int(y))
             recent_centers.append(raw_center)
@@ -133,9 +138,54 @@ while True:
                 ending_x = flight_points[-1][0]
                 last_horizontal_distance = abs(ending_x - starting_x)
 
+                start_point = flight_points[0]
+                end_point = flight_points[-1]
+
+                straight_line_distance = (
+                    (end_point[0] - start_point[0]) ** 2
+                    + (end_point[1] - start_point[1]) ** 2
+                ) ** 0.5
+
+                # A straight path approaches 1.0; a shaky path is lower.
+                if last_distance > 0:
+                    last_smoothness = straight_line_distance / last_distance
+                else:
+                    last_smoothness = 0
+
+                last_smoothness = max(0, min(1, last_smoothness))
+
+                frame_width = frame.shape[1]
+
+                airtime_points = min(last_airtime / 2.0, 1.0) * 40
+
+                distance_points = min(
+                    last_horizontal_distance / (frame_width * 0.75),
+                    1.0,
+                ) * 40
+
+                smoothness_points = last_smoothness * 20
+
+                last_score = round(
+                    airtime_points
+                    + distance_points
+                    + smoothness_points
+                )
+
+                print(f"Smoothness: {last_smoothness * 100:.0f}%")
+                print(f"Flight score: {last_score}/100")
+
         print(f"Airtime: {last_airtime:.2f} seconds")
         print(f"Path length: {last_distance:.0f} pixels")
         print(f"Horizontal distance: {last_horizontal_distance} pixels")
+
+        if len(flight_points) >= 2:
+            arduino.write(f"SCORE:{last_score}\n".encode())
+            arduino.flush()
+            print(f"Sent score {last_score} to Arduino")
+
+        # Prevent this flight from being sent repeatedly
+        flight_started = False
+        flight_armed = False
 
         if flight_started:
             status = "FLYING"
@@ -162,7 +212,16 @@ while True:
             0.6,
             (255, 255, 255),
             2,
-        )  
+        )
+        cv2.putText(
+            frame,
+            f"Score: {last_score}/100",
+            (20, 145),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.8,
+            (0, 255, 0),
+            2,
+        )
 
 
     cv2.imshow("Paper Plane Tracker", frame)
@@ -189,6 +248,7 @@ while True:
         last_seen_time = None
 
         print("Flight armed. Throw the plane!")
+
 
 camera.release()
 cv2.destroyAllWindows()

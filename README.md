@@ -69,8 +69,12 @@ internet access.
 
 ### Flight history and trajectory replay
 
-The left panel saves the last 50 completed flights, newest first. Collapse or expand
-it with the arrow. Check **Compare** to add up to five color-coded, translucent paths
+The left panel keeps the last 50 completed flights lasting at least 0.50 seconds,
+newest first. History resets when the tracker process restarts (not when the browser
+refreshes). Collapse or expand it with the animated arrow; reduced-motion preferences
+are respected. Click a flight name to edit it, then press Enter or click away to save.
+Escape cancels; names must contain 1–60 characters and update on both laptops.
+Check **Compare** to add up to five color-coded, translucent paths
 over the current graph. **Clear overlays** removes comparisons without deleting history.
 
 Press a flight's **Replay** to animate its recorded path on the same graph. Pause,
@@ -78,8 +82,9 @@ resume, scrub the timeline, or choose 0.5× / 1× / 2× playback. Replay never r
 live tracking, changes the current score, or requests spoken commentary. Closing
 replay leaves that flight's full comparison path visible.
 
-History lives locally in `.skytrace/flights.sqlite3` (ignored by Git), survives
-tracker restarts, and is shared with both laptops through `/api/history`. It stores
+History lives only in tracker memory and is shared with both laptops through
+`/api/history`. The previous `.skytrace/flights.sqlite3` file is no longer read or
+written. History contains
 positions, sample times, and metrics—not camera video, audio, or API keys. Flights
 recorded before this feature was installed cannot be recovered automatically.
 Different frame resolutions are normalized for overlays; comparisons only make

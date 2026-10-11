@@ -7,11 +7,12 @@ from unittest.mock import patch
 
 import dashboard_server as dashboard
 from flight_voice import FlightVoice
+from flight_history import FlightHistory
 
 
 class DashboardTests(unittest.TestCase):
     def setUp(self):
-        self.state = dashboard.DashboardState()
+        self.state = dashboard.DashboardState(FlightHistory())
         self.voice = FlightVoice()
         self.patches = [patch.object(dashboard, "dashboard_state", self.state),
                         patch.object(dashboard, "flight_voice", self.voice),
@@ -60,6 +61,16 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(headers["Cache-Control"], "no-store")
         self.assertEqual(json.loads(payload)["flights"], saved)
+
+    def test_rename_endpoint(self):
+        self.state.update(status="COMPLETE", airtime=1, score=83)
+        identifier = self.state.history()[0]["history_id"]
+        body = dict(history_id=identifier, name="My glider", session_id=self.voice.session_id)
+        self.assertEqual(self.request("POST", "/api/history/rename", body)[0], 200)
+        self.assertEqual(self.state.history()[0]["name"], "My glider")
+        self.assertEqual(self.request("POST", "/api/history/rename", dict(body, name=""))[0], 400)
+        self.assertEqual(self.request("POST", "/api/history/rename", dict(body, session_id="old"))[0], 409)
+        self.assertEqual(self.request("POST", "/api/history/rename", dict(body, history_id="gone"))[0], 404)
 
 
 if __name__ == "__main__":

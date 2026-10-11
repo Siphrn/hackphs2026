@@ -11,6 +11,7 @@ function element(id) {
     checked: false, textContent: '', style: {setProperty(key,value){this[key]=value;}}, attributes: {}, children: [], scrollTop: 0,
     setAttribute(key, value) {this.attributes[key] = String(value);}, getAttribute(key){return this.attributes[key] ?? null;},
     append(...nodes){this.children.push(...nodes);},replaceChildren(...nodes){this.children=nodes;},
+    replaceWith(node){this.replacement=node;},focus(){},select(){},setCustomValidity(){},reportValidity(){},
     classList: {toggle() {}}, querySelector() {return element('connection-label');},
     addEventListener(type, callback) {this[type] = callback;},
   });
@@ -25,9 +26,9 @@ class AudioContext {
 const context = {
   document: {getElementById: element, createElement:()=>element(`node-${nodeCount++}`),createElementNS:()=>element(`node-${nodeCount++}`)}, window: {AudioContext}, setTimeout() {}, console,
   requestAnimationFrame(){return 1;},cancelAnimationFrame(){},
-  fetch: async (url) => {
+  fetch: async (url, options) => {
     if (url === '/api/voice') requests++;
-    return {ok: true, json: async () => ({}), arrayBuffer: async () => new ArrayBuffer(8)};
+    return {ok: true, json: async () => url === '/api/history/rename' ? {name:JSON.parse(options.body).name} : ({}), arrayBuffer: async () => new ArrayBuffer(8)};
   },
 };
 vm.createContext(context);
@@ -99,8 +100,30 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
   element('clear-comparisons').click();
   assert.equal(element('comparison-lines').children.length, 0);
   assert.equal(element('replay-bar').hidden, true);
+  const nameButton = element('history-list').children[0].children[0].children[0];
+  nameButton.click();
+  const editor = nameButton.replacement;
+  assert.equal(editor.attributes['aria-label'], 'Flight name');
+  const listBeforePoll = element('history-list').children;
+  vm.runInContext('renderHistory()', context);
+  assert.equal(element('history-list').children, listBeforePoll, 'Polling must preserve active editor');
+  editor.value = 'Wind Rider';
+  editor.keydown({key:'Enter',preventDefault(){}});
+  await flush();
+  assert.equal(vm.runInContext('historyFlights[0].name',context), 'Wind Rider');
+  const renamedButton = element('history-list').children[0].children[0].children[0];
+  renamedButton.click();
+  renamedButton.replacement.value = 'Cancelled';
+  renamedButton.replacement.keydown({key:'Escape',preventDefault(){}});
+  assert.equal(vm.runInContext('historyFlights[0].name',context), 'Wind Rider');
+  element('history-toggle').setAttribute('aria-expanded','true');
+  element('history-toggle').click();
+  assert.equal(element('history-toggle').getAttribute('aria-expanded'),'false');
+  assert.equal(element('history-body').inert,true);
+  assert(html.includes('prefers-reduced-motion'));
   console.log('Coach checks passed: automatic, once per flight, mute stops, no replay.');
   console.log('Score checks passed: mismatched score rejected, late audio cancelled.');
   console.log('Graph checks passed: invalid samples, path breaks, real launch point, exit labels, reset.');
   console.log('History checks passed: cards, overlays, coordinate scaling, replay/scrub isolation, selection limit, clear.');
+  console.log('Name editor checks passed: save, cancel, polling protection; collapse accessibility and reduced-motion support.');
 })().catch(error => {console.error(error); process.exitCode = 1;});

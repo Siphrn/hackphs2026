@@ -93,25 +93,35 @@
       padding: clamp(14px, 2.5vw, 28px);
     }
 
-    .dashboard-shell { display: grid; grid-template-columns: 244px minmax(0, 1fr); gap: 16px; align-items: start; }
+    .dashboard-shell { display: grid; grid-template-columns: 244px minmax(0, 1fr); gap: 16px; align-items: start; transition: grid-template-columns .3s cubic-bezier(.22,1,.36,1); }
     .dashboard-shell.history-collapsed { grid-template-columns: 48px minmax(0, 1fr); }
     .dashboard-content { min-width: 0; }
-    .history-panel { position: sticky; top: 100px; padding: 12px; min-width: 0; }
+    .history-panel { position: sticky; top: 100px; padding: 12px; min-width: 0; overflow: hidden; transition: padding .3s ease; }
     .history-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-    .history-heading h2 { margin: 0; font-size: 15px; }
+    .history-heading h2 { margin: 0; font-size: 15px; white-space: nowrap; overflow: hidden; transition: opacity .2s, max-width .3s; max-width: 190px; }
     button { color: var(--text); border: 1px solid var(--line); background: var(--panel-soft); border-radius: 7px; padding: 7px 10px; cursor: pointer; }
     button:hover { border-color: var(--green); }
     button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; }
     button:disabled { opacity: .45; cursor: default; }
-    .history-collapsed .history-body, .history-collapsed .history-heading h2 { display: none; }
+    .history-body { display: grid; grid-template-rows: 1fr; opacity: 1; visibility: visible; transition: grid-template-rows .3s ease, opacity .2s ease, visibility .3s; }
+    .history-body-inner { min-height: 0; overflow: hidden; }
+    .history-collapsed .history-body { grid-template-rows: 0fr; opacity: 0; visibility: hidden; }
+    .history-collapsed .history-heading h2 { opacity: 0; max-width: 0; }
     .history-collapsed .history-panel { padding: 6px; }
-    .history-collapsed #history-toggle { padding: 7px; }
+    #history-toggle { flex-shrink: 0; width: 32px; height: 34px; padding: 0; font-size: 24px; }
+    #history-toggle span { display: inline-block; transition: transform .3s ease; }
+    .history-collapsed #history-toggle span { transform: rotate(180deg); }
+    .history-collapsed .history-heading { gap: 0; }
     .history-note { line-height: 1.5; margin: 10px 0; }
     .history-list { display: grid; gap: 9px; max-height: min(64vh, 640px); overflow-y: auto; scrollbar-width: thin; padding-right: 3px; }
     .history-item { padding: 11px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.015); }
     .history-item.selected { border-color: var(--overlay-color); }
     .history-item-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; }
     .history-item-head strong { color: var(--green); font-variant-numeric: tabular-nums; }
+    .flight-name { padding: 2px 0; border: 0; border-bottom: 1px dashed transparent; background: none; text-align: left; min-width: 0; overflow-wrap: anywhere; font-size: 13px; }
+    .flight-name:hover { border-bottom-color: var(--muted); }
+    .flight-name-input { width: 100%; min-width: 0; border: 1px solid var(--green); border-radius: 4px; background: var(--panel-soft); color: var(--text); padding: 3px; font-size: 13px; }
+    .history-item-head strong { flex-shrink: 0; }
     .history-meta { margin: 7px 0 10px; color: var(--muted); font-size: 11px; line-height: 1.6; }
     .history-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; }
     .history-actions label { display: flex; gap: 5px; align-items: center; cursor: pointer; }
@@ -272,7 +282,7 @@
     @media (max-width: 800px) {
       .dashboard-shell, .dashboard-shell.history-collapsed { grid-template-columns: 1fr; }
       .history-panel { position: static; }
-      .history-collapsed .history-heading h2 { display: block; }
+      .history-collapsed .history-heading h2 { opacity: 1; max-width: 190px; }
       .history-list { max-height: 260px; }
       .hero { align-items: flex-start; flex-direction: column; }
       .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -291,6 +301,9 @@
       .legend { justify-content: flex-start; }
       .plot-wrap { min-height: 0; }
       .status-banner { align-items: flex-start; flex-direction: column; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .dashboard-shell, .history-body, .history-panel, .history-heading h2, #history-toggle span { transition: none; }
     }
   </style>
 </head>
@@ -325,14 +338,16 @@
       <aside class="card history-panel" aria-label="Flight history">
         <div class="history-heading">
           <h2>Flight history <span id="history-count" class="supporting">0</span></h2>
-          <button id="history-toggle" type="button" aria-expanded="true" aria-controls="history-body" aria-label="Collapse flight history">‹</button>
+          <button id="history-toggle" type="button" aria-expanded="true" aria-controls="history-body" aria-label="Collapse flight history"><span aria-hidden="true">‹</span></button>
         </div>
         <div id="history-body" class="history-body">
-          <p class="supporting history-note">Select past flights to compare.<br>Replay animates the recorded path.</p>
+          <div class="history-body-inner">
+          <p class="supporting history-note">Click a flight name to edit.<br>Select past flights to compare.</p>
           <div id="history-list" class="history-list"><p class="supporting">No flights yet. Complete a throw to save it here.</p></div>
           <p id="history-status" class="supporting" role="status"></p>
           <button id="clear-comparisons" type="button" style="margin-top:10px" disabled>Clear overlays</button>
-          <p class="supporting history-note">Last 50 flights · saved on this Mac</p>
+          <p class="supporting history-note">This session only · flights ≥ 0.50 s<br>History clears when the tracker restarts.</p>
+          </div>
         </div>
       </aside>
       <div class="dashboard-content">
@@ -431,12 +446,57 @@
     let historySignature = "";
     let historyLoading = false;
     let historyPollKey = null;
+    let editingFlightId = null;
+    const flightName = (flight) => flight.name || `Flight ${flight.flight_id}`;
+
+    function editFlightName(flight, button) {
+      if (editingFlightId) return;
+      editingFlightId = flight.history_id;
+      const input = document.createElement("input");
+      input.className = "flight-name-input";
+      input.value = flightName(flight);
+      input.maxLength = 60;
+      input.setAttribute("aria-label", "Flight name");
+      button.replaceWith(input);
+      input.focus(); input.select();
+      let finished = false;
+      async function finish(cancel = false) {
+        if (finished) return;
+        const name = input.value.trim();
+        if (!cancel && !name) {
+          input.setCustomValidity("Enter a flight name."); input.reportValidity(); input.focus(); return;
+        }
+        finished = true;
+        if (!cancel && name !== flightName(flight)) {
+          input.disabled = true;
+          try {
+            const response = await fetch("/api/history/rename", {method:"POST", headers:{"Content-Type":"application/json"},
+              body:JSON.stringify({session_id:latestData?.session_id, history_id:flight.history_id, name})});
+            if (!response.ok) throw new Error("Rename failed");
+            const result = await response.json();
+            flight.name = result.name;
+            const current = historyFlights.find(item => item.history_id === flight.history_id);
+            if (current) current.name = result.name;
+            byId("history-status").textContent = "Flight renamed.";
+          } catch (error) { byId("history-status").textContent = "Couldn't rename flight. Please try again."; }
+        }
+        editingFlightId = null;
+        renderHistory(); renderComparisons();
+      }
+      input.addEventListener("input", () => input.setCustomValidity(""));
+      input.addEventListener("blur", () => finish());
+      input.addEventListener("keydown", event => {
+        if (event.key === "Enter") { event.preventDefault(); finish(); }
+        if (event.key === "Escape") { event.preventDefault(); finish(true); }
+      });
+    }
 
     function historyColor(id) {
       return overlayAssignments.get(id) || "#96aaa0";
     }
 
     function renderHistory() {
+      if (editingFlightId) return; // Polling must not replace an active name editor.
       const list = byId("history-list");
       const scroll = list.scrollTop;
       const cards = historyFlights.map(flight => {
@@ -445,8 +505,13 @@
         card.style.setProperty("--overlay-color", historyColor(flight.history_id));
         const head = document.createElement("div");
         head.className = "history-item-head";
-        const name = document.createElement("span");
-        name.textContent = `Flight ${flight.flight_id}`;
+        const name = document.createElement("button");
+        name.type = "button";
+        name.className = "flight-name";
+        name.textContent = flightName(flight);
+        name.setAttribute("aria-label", `Rename ${flightName(flight)}`);
+        name.title = "Click to rename · Enter saves · Escape cancels";
+        name.addEventListener("click", () => editFlightName(flight, name));
         const score = document.createElement("strong");
         score.textContent = `${Math.round(number(flight.score))}/100`;
         head.append(name, score);
@@ -460,7 +525,7 @@
         const checkbox = document.createElement("input");
         checkbox.type = "checkbox";
         checkbox.checked = selectedHistory.has(flight.history_id);
-        checkbox.setAttribute("aria-label", `Compare flight ${flight.flight_id} from ${meta.textContent}`);
+        checkbox.setAttribute("aria-label", `Compare ${flightName(flight)} from ${meta.textContent}`);
         checkbox.addEventListener("change", () => {
           if (setComparison(flight.history_id, checkbox.checked)) {
             card.classList.toggle("selected", checkbox.checked);
@@ -473,7 +538,7 @@
         const button = document.createElement("button");
         button.type = "button";
         button.textContent = "Replay";
-        button.setAttribute("aria-label", `Replay flight ${flight.flight_id} from ${meta.textContent}`);
+        button.setAttribute("aria-label", `Replay ${flightName(flight)} from ${meta.textContent}`);
         button.disabled = !Array.isArray(flight.trajectory) || !flight.trajectory.some(validPoint);
         button.addEventListener("click", () => startReplay(flight.history_id));
         actions.append(label, button);
@@ -499,8 +564,8 @@
         const response = await fetch("/api/history", {cache:"no-store"});
         if (!response.ok) throw new Error("History unavailable");
         const result = await response.json();
-        const flights = Array.isArray(result.flights) ? result.flights : [];
-        const signature = flights.map(flight => flight.history_id).join(",");
+        const flights = Array.isArray(result.flights) ? result.flights.filter(flight => number(flight.airtime) >= .5) : [];
+        const signature = JSON.stringify(flights.map(flight => [flight.history_id, flight.name]));
         if (signature !== historySignature) {
           historyFlights = flights;
           historySignature = signature;
@@ -577,7 +642,7 @@
           replayPoint = normalized.filter(validPoint).at(-1);
         }
         paths.push(path);
-        names.push(`Flight ${flight.flight_id} (${Math.round(number(flight.score))})`);
+        names.push(`${flightName(flight)} (${Math.round(number(flight.score))})`);
       }
       byId("comparison-lines").replaceChildren(...paths);
       byId("comparison-note").textContent = names.length ? `Overlays: ${names.join(" · ")} · aligned to camera frame, not physical distance` : "";
@@ -590,7 +655,7 @@
       if (replay) {
         const flight = historyFlights.find(flight => flight.history_id === replay.id);
         const duration = replayDuration(flight);
-        byId("replay-title").textContent = `Flight ${flight.flight_id} replay`;
+        byId("replay-title").textContent = `${flightName(flight)} replay`;
         byId("replay-clock").textContent = `${replay.time.toFixed(2)} / ${duration.toFixed(2)} s`;
         byId("replay-scrub").value = Math.round(replay.time / duration * 1000);
         byId("replay-pause").textContent = replay.playing ? "Pause" : replay.time >= duration ? "Restart" : "Resume";
@@ -633,7 +698,7 @@
       const expanded = button.getAttribute("aria-expanded") === "true";
       button.setAttribute("aria-expanded", String(!expanded));
       button.setAttribute("aria-label", expanded ? "Expand flight history" : "Collapse flight history");
-      button.textContent = expanded ? "›" : "‹";
+      byId("history-body").inert = expanded;
       byId("dashboard-shell").classList.toggle("history-collapsed", expanded);
     });
     byId("clear-comparisons").addEventListener("click", () => {

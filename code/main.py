@@ -11,6 +11,7 @@ import serial
 
 from dashboard_server import dashboard_state, start_dashboard_server
 from flight_prediction import predict_flight
+from flight_recording import FlightRecorder
 
 
 FLIGHT_END_TIMEOUT = 0.35
@@ -96,6 +97,7 @@ if not camera.isOpened():
 arduino = connect_arduino()
 
 dashboard_server = start_dashboard_server(port=8000)
+recorder = FlightRecorder(dashboard_state.attach_video)
 
 trajectory = deque(maxlen=150)
 recent_centers = deque(maxlen=5)
@@ -118,6 +120,7 @@ last_smoothness = 0
 
 try:
     while True:
+        flight_just_finished = False
         success, frame = camera.read()
 
         if not success:
@@ -205,6 +208,9 @@ try:
         frame_height, frame_width = frame.shape[:2]
         prediction = predict_flight(flight_samples, frame_width, frame_height)
 
+        if flight_started and current_time - last_seen_time <= FLIGHT_END_TIMEOUT:
+            recorder.capture(frame, current_time - flight_start_time)
+
         if (
             flight_started
             and last_seen_time is not None
@@ -252,6 +258,7 @@ try:
             flight_started = False
             flight_armed = False
             flight_complete = True
+            flight_just_finished = True
 
         if flight_started:
             status = "FLYING"
@@ -288,7 +295,10 @@ try:
             prediction=prediction["points"],
             forecast_endpoint=prediction["forecast_endpoint"],
             forecast_kind=prediction["forecast_kind"],
+            video_status="pending" if status == "COMPLETE" else "unavailable",
         )
+        if flight_just_finished:
+            recorder.finish(dashboard_state.snapshot()["history_id"], last_score, last_airtime)
 
         display_status = (
             "Press SPACE to arm"
@@ -332,6 +342,7 @@ try:
             break
 
         if key == ord("c"):
+            recorder.reset()
             trajectory.clear()
             recent_centers.clear()
             flight_points.clear()
@@ -344,6 +355,7 @@ try:
             last_seen_time = None
 
         if key == ord(" "):
+            recorder.reset()
             flight_armed = True
             flight_started = False
             flight_complete = False
@@ -356,6 +368,7 @@ try:
             last_seen_time = None
             print("Flight armed. Throw the plane!")
 finally:
+    recorder.close()
     camera.release()
     if arduino is not None:
         arduino.close()

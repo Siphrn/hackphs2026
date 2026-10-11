@@ -21,6 +21,7 @@ class DashboardState:
             "flight_id": 0,
             "history_id": None,
             "history_error": False,
+            "profile_id": None,
             "detected": False,
             "score": 0,
             "airtime": 0,
@@ -44,6 +45,10 @@ class DashboardState:
 
     def update(self, **values):
         with self._lock:
+            # Capture the selected plane once per throw, not midway through flight.
+            if (values.get("status") in ("ARMED", "FLYING")
+                    and self._data["status"] not in ("ARMED", "FLYING") and self._history_store):
+                self._data["profile_id"] = self._history_store.profiles()["active_profile_id"]
             if values.get("status") == "COMPLETE" and self._data["status"] != "COMPLETE":
                 self._data["flight_id"] += 1
             # A completed result is immutable until the tracker leaves COMPLETE.
@@ -65,10 +70,26 @@ class DashboardState:
     def history(self):
         return self._history_store.list() if self._history_store else []
 
+    def attach_video(self, history_id, payload, duration=0, truncated=False):
+        if self._history_store:
+            self._history_store.attach_video(history_id, payload, duration, truncated)
+
+    def video(self, history_id):
+        return self._history_store.video(history_id) if self._history_store else None
+
     def rename_flight(self, history_id, name):
         if self._history_store is None:
             raise KeyError(history_id)
         return self._history_store.rename(history_id, name)
+
+    def profiles(self):
+        return self._history_store.profiles() if self._history_store else {"profiles": [], "active_profile_id": None}
+
+    def change_profile(self, action, **values):
+        if self._history_store is None:
+            raise ValueError("Profiles unavailable")
+        self._history_store.change_profile(action, **values)
+        return self.profiles()
 
 
 dashboard_state = DashboardState(FlightHistory())
@@ -77,7 +98,7 @@ flight_voice = FlightVoice()
 
 class DashboardRequestHandler(BaseHTTPRequestHandler):
     def do_POST(self):
-        if self.path not in ("/api/voice", "/api/history/rename"):
+        if self.path not in ("/api/voice", "/api/history/rename", "/api/profiles"):
             self.send_error(404)
             return
         # Do not let unrelated websites trigger paid speech requests on localhost.
@@ -87,13 +108,35 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            if not 0 < length <= 1024:
+            if not 0 < length <= 4096:
                 raise ValueError("Invalid body size")
             requested = json.loads(self.rfile.read(length))
             if not isinstance(requested, dict):
                 raise ValueError("Invalid body")
         except (ValueError, json.JSONDecodeError):
             self.send_error(400, "Expected flight identity")
+            return
+        if self.path == "/api/profiles":
+            if requested.get("session_id") != flight_voice.session_id:
+                self.send_error(409, "Tracker session changed")
+                return
+            try:
+                action = requested.pop("action", None)
+                requested.pop("session_id", None)
+                result = dashboard_state.change_profile(action, **requested)
+            except ValueError as error:
+                self.send_error(400, str(error))
+                return
+            except KeyError:
+                self.send_error(404, "Flight no longer in history")
+                return
+            payload = json.dumps(result).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
             return
         if self.path == "/api/history/rename":
             if requested.get("session_id") != flight_voice.session_id:
@@ -130,9 +173,56 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
+        if self.path.startswith("/api/video/"):
+            parts = self.path.removeprefix("/api/video/").split("/")
+            if len(parts) != 2 or parts[0] != flight_voice.session_id or not parts[1].endswith(".mp4"):
+                self.send_error(404, "Recording no longer available")
+                return
+            payload = dashboard_state.video(parts[1][:-4])
+            if payload is None:
+                self.send_error(404, "Recording no longer available")
+                return
+            size = len(payload)
+            start, end, partial = 0, size - 1, False
+            byte_range = self.headers.get("Range")
+            if byte_range:
+                try:
+                    if not byte_range.startswith("bytes=") or "," in byte_range:
+                        raise ValueError("Unsupported range")
+                    left, right = byte_range[6:].split("-")
+                    if left:
+                        start = int(left)
+                        end = min(int(right), size - 1) if right else size - 1
+                    else:
+                        suffix = int(right)
+                        if suffix <= 0:
+                            raise ValueError("Invalid suffix")
+                        start = max(0, size - suffix)
+                    if start < 0 or start >= size or end < start:
+                        raise ValueError("Invalid range")
+                    partial = True
+                except ValueError:
+                    self.send_response(416)
+                    self.send_header("Content-Range", f"bytes */{size}")
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return
+            self.send_response(206 if partial else 200)
+            self.send_header("Content-Type", "video/mp4")
+            self.send_header("Accept-Ranges", "bytes")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(end - start + 1))
+            if partial:
+                self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+            self.end_headers()
+            try:
+                self.wfile.write(memoryview(payload)[start:end + 1])
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+            return
         if self.path == "/api/history":
             try:
-                payload = json.dumps({"flights": dashboard_state.history()}).encode("utf-8")
+                payload = json.dumps({"flights": dashboard_state.history(), **dashboard_state.profiles(), "session_id": flight_voice.session_id}).encode("utf-8")
             except OSError:
                 self.send_error(503, "History unavailable")
                 return

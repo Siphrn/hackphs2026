@@ -72,6 +72,41 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(self.request("POST", "/api/history/rename", dict(body, session_id="old"))[0], 409)
         self.assertEqual(self.request("POST", "/api/history/rename", dict(body, history_id="gone"))[0], 404)
 
+    def test_profile_endpoint(self):
+        body = dict(action="create", name="Dart", session_id=self.voice.session_id)
+        self.assertEqual(self.request("POST", "/api/profiles", dict(body, session_id="old"))[0], 409)
+        status, headers, payload = self.request("POST", "/api/profiles", body)
+        self.assertEqual(status, 200)
+        profiles = json.loads(payload)
+        identifier = profiles["active_profile_id"]
+        self.assertEqual(profiles["profiles"][0]["name"], "Dart")
+        self.assertEqual(headers["Cache-Control"], "no-store")
+        status, _, payload = self.request("GET", "/api/history")
+        self.assertEqual(json.loads(payload)["active_profile_id"], identifier)
+        self.assertEqual(json.loads(payload)["session_id"], self.voice.session_id)
+        self.assertEqual(self.request("POST", "/api/profiles", dict(body, action="reorder", order=[]))[0], 400)
+        self.assertEqual(self.request("POST", "/api/profiles", dict(body, action="assign", history_id="missing", profile_id=identifier))[0], 404)
+
+    def test_video_endpoint_session_and_ranges(self):
+        self.state.update(status="COMPLETE", airtime=1)
+        identifier = self.state.history()[0]["history_id"]
+        self.state.attach_video(identifier, b"0123456789", 1)
+        url = f"/api/video/{self.voice.session_id}/{identifier}.mp4"
+        status, headers, data = self.request("GET", url)
+        self.assertEqual(status, 200)
+        self.assertEqual(data, b"0123456789")
+        self.assertEqual(headers["Content-Type"], "video/mp4")
+        self.assertEqual(headers["Cache-Control"], "no-store")
+        for byte_range, expected_status, expected in [("bytes=2-5",206,b"2345"), ("bytes=-3",206,b"789"), ("bytes=7-",206,b"789"), ("bytes=99-",416,b""), ("bytes=4-2",416,b""), ("bytes=0-1,3-4",416,b"")]:
+            connection = http.client.HTTPConnection("127.0.0.1", self.server.server_port)
+            connection.request("GET", url, headers={"Range":byte_range})
+            response = connection.getresponse()
+            self.assertEqual(response.status, expected_status)
+            self.assertEqual(response.read(), expected)
+            connection.close()
+        self.assertEqual(self.request("GET", f"/api/video/old-session/{identifier}.mp4")[0], 404)
+        self.assertEqual(self.request("GET", f"/api/video/{self.voice.session_id}/missing.mp4")[0], 404)
+
 
 if __name__ == "__main__":
     unittest.main()

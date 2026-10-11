@@ -69,13 +69,28 @@ internet access.
 
 ### Flight history and trajectory replay
 
+The **Flight Log** has **Flights** and **Planes** tabs. Its shared **Next throw**
+selector is the only control for selecting the upcoming flight's plane. Selection
+is captured when you arm the tracker; changes during flight affect the next throw.
+In **Planes**, click **+ Add plane** to reveal the name form. Drag dotted grips to
+reorder profiles, or use each plane's **⋯** menu to move it up/down. Rows show flight
+counts, best scores, and a badge for the plane selected for the next throw.
+
+In **Flights**, filter by plane using **All planes**. Click a flight name to rename
+it, or open its **⋯** menu for Rename and **Move to plane…**. Drag a flight's small
+grip to reveal a temporary category tray, then drop onto a plane or **Unassigned**.
+The tray appears only during dragging. Moving saved flights does not change the
+next throw selection. Filtering preserves graph comparisons. Profiles and their
+order are shared across both laptops and clear on tracker restart (up to 30).
+
 The left panel keeps the last 50 completed flights lasting at least 0.50 seconds,
 newest first. History resets when the tracker process restarts (not when the browser
 refreshes). Collapse or expand it with the animated arrow; reduced-motion preferences
 are respected. Click a flight name to edit it, then press Enter or click away to save.
 Escape cancels; names must contain 1–60 characters and update on both laptops.
-Check **Compare** to add up to five color-coded, translucent paths
-over the current graph. **Clear overlays** removes comparisons without deleting history.
+Click **Compare** to reveal selection checkboxes and add up to five color-coded,
+translucent paths over the graph. **Done** hides selection controls but keeps the
+overlays. **Clear comparisons** removes overlays without deleting history.
 
 Press a flight's **Replay** to animate its recorded path on the same graph. Pause,
 resume, scrub the timeline, or choose 0.5× / 1× / 2× playback. Replay never replaces
@@ -84,11 +99,38 @@ replay leaves that flight's full comparison path visible.
 
 History lives only in tracker memory and is shared with both laptops through
 `/api/history`. The previous `.skytrace/flights.sqlite3` file is no longer read or
-written. History contains
-positions, sample times, and metrics—not camera video, audio, or API keys. Flights
+written. History JSON contains positions, sample times, metrics and video availability,
+never encoded video, audio, or API keys. Flights
 recorded before this feature was installed cannot be recovered automatically.
 Different frame resolutions are normalized for overlays; comparisons only make
 sense with the same camera position and view, and are not physical-distance measurements.
+
+### Session-only flight videos
+
+Each new saved throw gets a **Video** action after background encoding completes.
+Open it to watch the mirrored camera view with its tracked path and final score.
+The native player supports seeking, pause, fullscreen and playback speed where
+supported. This is separate from trajectory Replay and never triggers the voice
+coach or changes the live graph. Recording starts with the first tracked detection,
+not while waiting for a throw; clearing or rearming discards an unfinished recording.
+Throws under 0.50 seconds are still excluded from history and video storage.
+
+- H.264 MP4, no audio, up to 15 seconds per throw, at most 640 pixels wide and 20 fps.
+- Saved clips have a **100 MiB** total budget. Oldest clips expire first; their
+  flight metrics and paths remain. Clips also disappear when their flight leaves
+  the 50-flight log. Each encoded clip is capped at 10 MiB.
+- Capture uses an additional bounded 8 MiB JPEG buffer and one background encoding
+  job. Duration/buffer-limited recordings are marked as shortened in the viewer.
+  If the encoder is unavailable or still busy, tracking continues without a clip.
+- Completed clips live only in tracker RAM and clear when the process restarts.
+  OpenCV uses a temporary local scratch MP4 during encoding, removed immediately
+  afterward. No recording is uploaded to cloud services or sent to ElevenLabs.
+- Videos are served by the same local dashboard to your connected laptops. Anyone
+  who can access that dashboard on your LAN can also watch its session clips;
+  don't expose this development server to the public internet.
+
+Restart the Python tracker after installing this feature, then refresh the website.
+Older logged flights cannot gain recordings retroactively.
 
 ### Graph
 

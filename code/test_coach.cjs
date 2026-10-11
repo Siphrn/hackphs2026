@@ -10,10 +10,11 @@ function element(id) {
   if (!elements.has(id)) elements.set(id, {
     checked: false, textContent: '', style: {setProperty(key,value){this[key]=value;}}, attributes: {}, children: [], scrollTop: 0,
     setAttribute(key, value) {this.attributes[key] = String(value);}, getAttribute(key){return this.attributes[key] ?? null;},
+    removeAttribute(key){delete this[key];delete this.attributes[key];},pause(){this.paused=true;},load(){},showModal(){this.open=true;},close(){this.open=false;this.onClose?.();},
     append(...nodes){this.children.push(...nodes);},replaceChildren(...nodes){this.children=nodes;},
-    replaceWith(node){this.replacement=node;},focus(){},select(){},setCustomValidity(){},reportValidity(){},
+    replaceWith(node){this.replacement=node;},focus(){},select(){},setCustomValidity(){},reportValidity(){},setPointerCapture(){},releasePointerCapture(){},closest(){return this;},remove(){},getBoundingClientRect(){return {left:0,right:220,top:200,bottom:400};},
     classList: {toggle() {}}, querySelector() {return element('connection-label');},
-    addEventListener(type, callback) {this[type] = callback;},
+    addEventListener(type, callback) {this[type === 'close' ? 'onClose' : type] = callback;},
   });
   return elements.get(id);
 }
@@ -24,7 +25,7 @@ class AudioContext {
   createBufferSource() {return {connect() {}, start() {plays++;}, stop() {stops++;}};}
 }
 const context = {
-  document: {getElementById: element, createElement:()=>element(`node-${nodeCount++}`),createElementNS:()=>element(`node-${nodeCount++}`)}, window: {AudioContext}, setTimeout() {}, console,
+  document: {body:element('body'),getElementById: element, createElement:()=>element(`node-${nodeCount++}`),createElementNS:()=>element(`node-${nodeCount++}`)}, window: {AudioContext,innerWidth:1280,innerHeight:720,scrollBy(){}}, setTimeout() {}, console,
   requestAnimationFrame(){return 1;},cancelAnimationFrame(){},
   fetch: async (url, options) => {
     if (url === '/api/voice') requests++;
@@ -121,6 +122,106 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
   assert.equal(element('history-toggle').getAttribute('aria-expanded'),'false');
   assert.equal(element('history-body').inert,true);
   assert(html.includes('prefers-reduced-motion'));
+  let profilePosts = [];
+  context.fetch = async (url, options) => {
+    const body = JSON.parse(options.body);
+    profilePosts.push(body);
+    return {ok:true, json:async()=>({profiles:[{id:'dart',name:'Dart'},{id:'glider',name:'Glider'}],active_profile_id:'dart'})};
+  };
+  vm.runInContext(`planeProfiles=[{id:'dart',name:'Dart'},{id:'glider',name:'Glider'}];activeProfileId='dart';historyFlights[0].profile_id='dart';renderProfiles();renderHistory()`, context);
+  assert.equal(element('plane-list').children.length,2);
+  assert.equal(element('next-plane').value,'dart');
+  // Drag the first plane onto the second.
+  const firstGrip = element('plane-list').children[0].children[0];
+  context.document.elementFromPoint = () => element('plane-list').children[1];
+  firstGrip.pointerdown({button:0,pointerId:1,preventDefault(){}});
+  firstGrip.pointermove({clientX:10,clientY:10});
+  firstGrip.pointerup({pointerId:1});
+  await flush();
+  assert.deepEqual(profilePosts[0].order,['glider','dart']);
+  const profileSelect = element('history-list').children[0].children[3].children[1].children[2];
+  profileSelect.value = 'glider';
+  await profileSelect.change();
+  assert.equal(vm.runInContext('historyFlights[0].profile_id',context),'glider');
+  element('plane-filter').change({target:{value:'glider'}});
+  assert.equal(element('history-list').children.length,1);
+  assert.equal(element('history-count').textContent,1);
+  element('plane-filter').change({target:{value:'all'}});
+  assert.equal(element('history-list').children.length,6);
+  const flightGrip = element('history-list').children[0].children[4];
+  context.document.elementFromPoint = () => element('flight-drop-options').children[1];
+  flightGrip.pointerdown({button:0,pointerId:2,clientX:100,clientY:600,preventDefault(){}});
+  const cardsDuringDrag = element('history-list').children;
+  vm.runInContext('renderHistory()',context);
+  assert.equal(element('history-list').children,cardsDuringDrag,'Polling must preserve flight dragging');
+  flightGrip.pointermove({clientX:100,clientY:250});
+  await flightGrip.pointerup({pointerId:2});
+  assert.equal(profilePosts.at(-1).action,'assign');
+  assert.equal(profilePosts.at(-1).profile_id,'dart');
+  assert.equal(vm.runInContext('historyFlights[0].profile_id',context),'dart');
+  assert.equal(vm.runInContext('activeProfileId',context),'dart','Moving a flight must not change the selected plane');
+  context.document.elementFromPoint = () => element('flight-drop-options').children[0];
+  const nextGrip = element('history-list').children[0].children[4];
+  nextGrip.pointerdown({button:0,pointerId:3,clientX:100,clientY:600,preventDefault(){}});
+  nextGrip.pointermove({clientX:100,clientY:450});
+  await nextGrip.pointerup({pointerId:3});
+  assert.equal(profilePosts.at(-1).profile_id,null);
+  const postsBeforeCancel = profilePosts.length;
+  const cancelGrip = element('history-list').children[0].children[4];
+  cancelGrip.pointerdown({button:0,pointerId:4,clientX:100,clientY:600,preventDefault(){}});
+  cancelGrip.pointercancel();
+  await cancelGrip.pointerup({pointerId:4});
+  assert.equal(profilePosts.length,postsBeforeCancel,'Cancelled drag must not save');
+  assert.equal(vm.runInContext('draggedFlightId',context),null);
+  assert.equal(element('flight-drop-tray').hidden,true);
+  element('planes-tab').click();
+  assert.equal(element('planes-tab').attributes['aria-selected'],'true');
+  assert.equal(element('flights-view').hidden,true);
+  element('flights-tab').click();
+  assert.equal(element('planes-view').hidden,true);
+  element('compare-mode').click();
+  assert.equal(element('clear-comparisons').hidden,false);
+  assert.equal(element('history-list').children[0].children[2].children[0].hidden,false);
+  element('compare-mode').click();
+  assert.equal(element('clear-comparisons').hidden,true);
+  assert.equal(element('history-list').children[0].children[2].children[0].hidden,true);
+  element('plane-form').hidden=true;
+  element('add-plane-toggle').click();
+  assert.equal(element('plane-form').hidden,false);
+  element('add-plane-toggle').click();
+  assert.equal(element('plane-form').hidden,true);
+  assert(!html.includes('id="plane-status"'),'Only one shared status area');
+  const optionsMenu = element('history-list').children[0].children[3];
+  optionsMenu.open = true; optionsMenu.toggle();
+  const menuRows = element('history-list').children;
+  vm.runInContext('renderHistory()', context);
+  assert.equal(element('history-list').children, menuRows,'Polling must preserve an open actions menu');
+  optionsMenu.keydown({key:'Escape'});
+  assert.equal(vm.runInContext('openLogMenu',context),null);
+  assert.equal(optionsMenu.open,false);
+  vm.runInContext(`logStatus('Save failed',true,()=>{})`,context);
+  assert.equal(element('history-status').attributes.role,'alert');
+  assert.equal(element('log-retry').hidden,false);
+  vm.runInContext(`logStatus('Saved.')`,context);
+  assert.equal(element('log-retry').hidden,true);
+  vm.runInContext(`historyFlights[0].video_status='ready';historyFlights[0].video_duration=1;latestData={session_id:'video-session'};renderHistory()`,context);
+  const requestsBeforeVideo = requests;
+  const graphBeforeVideo = element('observed-line').attributes.d;
+  element('history-list').children[0].children[2].children[2].click();
+  assert.equal(element('clip-dialog').open,true);
+  assert(element('clip-video').src.includes('/api/video/video-session/saved-1.mp4'));
+  assert.equal(element('observed-line').attributes.d,graphBeforeVideo,'Video must not alter live graph');
+  assert.equal(requests,requestsBeforeVideo,'Video must not trigger paid narration');
+  element('clip-close').click();
+  assert.equal(element('clip-dialog').open,false);
+  assert.equal(element('clip-video').src,undefined);
+  assert.equal(element('clip-video').paused,true);
+  vm.runInContext(`openVideo(historyFlights[0]);render({status:'READY',session_id:'new-session',voice:{}})`,context);
+  assert.equal(element('clip-dialog').open,false,'Restart must close the old session recording');
+  console.log('Video checks passed: local session URL, player cleanup, restart isolation, no graph or voice side effects.');
+  console.log('Flight Log checks passed: tabs, contextual add form, compare mode and drag-only category tray.');
+  console.log('Flight drag checks passed: categorizing, unassigning, polling protection and cancellation.');
+  console.log('Profile checks passed: active plane, drag reorder, flight assignment, history filtering.');
   console.log('Coach checks passed: automatic, once per flight, mute stops, no replay.');
   console.log('Score checks passed: mismatched score rejected, late audio cancelled.');
   console.log('Graph checks passed: invalid samples, path breaks, real launch point, exit labels, reset.');

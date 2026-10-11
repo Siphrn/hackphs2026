@@ -1,151 +1,218 @@
-# SkyTrace Paper Airplane Scorer
+# SkyTrace
 
-Throw a yellow paper airplane through the laptop camera view. OpenCV tracks the
-flight, estimates its future path, scores how smoothly it moves throughout the
-visible portion of the throw, sends the score to an
-Arduino LCD, and updates a live browser dashboard.
+### Every paper airplane throw becomes a flight experiment.
 
-## Run it
+Track a paper airplane, visualize its path, compare designs, and hear your results—all from **one laptop**.
 
-### ElevenLabs voice commentary
+> Built at **HackPHS 2026** for the **“Into the Skies”** theme.
+> SkyTrace brings together computer vision, Arduino hardware, and an interactive flight lab.
 
-Start the tracker normally; voice credentials load automatically from Mac Keychain
-(or `ELEVENLABS_API_KEY` if set):
+## The idea
 
-```sh
+Paper airplanes are easy to build, but their flights are hard to compare by eye.
+SkyTrace turns each throw into something you can review: a camera-visible
+trajectory, a smoothness score, a short motion forecast, and a tracked video clip.
+Build, fly, compare, and improve.
+
+## Features
+
+- **Live tracking:** OpenCV follows yellow markings on your airplane through the webcam.
+- **Smoothness scoring:** a 0–100 score based on direction and speed consistency during the visible flight.
+- **Trajectory dashboard:** observed path, visible airtime, pixel-based speed, and a short-term forecast.
+- **Plane profiles:** organize designs, reorder profiles, and drag saved flights into categories.
+- **Flight comparisons:** overlay up to five previous trajectories and replay their recorded paths.
+- **Flight videos:** watch short local clips with tracking annotations and the final score.
+- **Arduino scoreboard:** send completed scores over USB to a 1602 LCD.
+- **Optional voice coach:** ElevenLabs generates spoken, score-based feedback.
+
+## What you need
+
+**One laptop is enough.** The webcam tracker, Python server, browser dashboard,
+recordings, and voice integration all run on the same machine. No second laptop
+or separate frontend server is required.
+
+- A laptop with a webcam and Python 3; the current setup was developed on macOS.
+- A paper airplane with clearly visible yellow markings.
+- For the scoreboard: an Arduino, USB cable, LCD1602, breadboard, and wiring matching the sketch.
+- For voice feedback: an ElevenLabs API key, internet access, and available API credits.
+
+Tracking and the dashboard work without an Arduino or internet connection.
+Only the optional voice coach needs internet access.
+
+## Quick start
+
+### 1. Install dependencies
+
+From the repository root:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+```
+
+On Windows, activate with `.venv\Scripts\activate` instead of the `source` command.
+
+### 2. Set up the scoreboard (optional)
+
+Open [arduino/arduinoWriting.ino](arduino/arduinoWriting.ino) in the Arduino IDE
+and upload it to your board. The sketch uses a parallel LCD connection:
+`LiquidCrystal lcd(12, 11, 5, 4, 3, 2)`—wire your LCD to match.
+
+Connect the Arduino to the **same laptop** by USB and close the Arduino IDE
+Serial Monitor before starting Python. Communication uses **9600 baud**.
+
+The tracker automatically checks common macOS Arduino ports. If necessary, set
+`SKYTRACE_ARDUINO_PORT` to your board's serial port. Without a board, tracking
+and the dashboard continue without the LCD.
+
+### 3. Start SkyTrace
+
+```bash
 python code/main.py
 ```
 
-There is no startup key prompt or separate verification request. For one-time setup
-on another Mac, or to replace a rotated key, run `python code/configure_voice.py`.
-The key is stored securely in Keychain, never source files or the browser. Rotate
-keys shared in chat. Enable Text to Speech access; the default voice is George
-(`JBFqnCBsd6RMkjVDRZzb`), overridable with `ELEVENLABS_VOICE_ID`.
+Allow camera access if prompted. Open **[localhost:8000](http://localhost:8000)**
+in a browser on that same laptop. If the port is occupied, use the dashboard URL
+printed in the terminal instead.
 
-In the website's top bar, switch **Flight coach** on once to allow browser audio.
-It automatically speaks once after each completed flight while enabled. Switching
-it off stops speech and prevents further requests from that browser; speech already
-being generated may still consume credits. There are no voice play or replay controls,
-and switching back on does not repeat an already-announced flight. The switch
-starts off on page load so browsers can unlock sound from your click.
-Feedback tiers are 0–24, 25–49, 50–74, 75–89, and 90–100.
-Speech includes the exact score. Only the score and a short scripted message go
-to ElevenLabs, not camera video. Suggestions are general coaching, not measured
-wing diagnostics. Internet and ElevenLabs credits are required for audio; tracking
-and scoring still work offline. Audio generation runs in the background and is
-deduplicated per flight, including across browser tabs. The last 12 flights are
-cached in memory to deduplicate requests. ElevenLabs still authenticates actual
-speech requests; an invalid or expired key cannot be bypassed. The old
-`code/start_with_voice.py` launcher also works without a prompt.
+Keep the OpenCV window and browser side by side. Python must stay running
+while you use the dashboard.
 
-### Tracker
+### 4. Make your first throw
 
-1. Connect the Arduino and close the Arduino IDE Serial Monitor.
-2. Activate the Python virtual environment.
-3. From the repository root, run:
+1. Keep the camera stationary and choose a well-lit background without other yellow objects.
+2. Optionally add a design in **Planes**, then choose it under **Next throw**.
+3. Focus the **OpenCV camera window** and press **Space** to arm the tracker.
+4. Throw the airplane through the camera view.
+5. Review its completed score, trajectory, and video in the browser.
 
-   ```bash
-   python code/main.py
-   ```
+**Keyboard controls—in the OpenCV window:**
 
-4. Open [http://localhost:8000](http://localhost:8000) on the tracking laptop.
-5. Press Space in the OpenCV camera window to arm a throw. Press Q to quit and C
-   to clear the displayed path.
+- **Space:** arm a new throw.
+- **C:** clear the current path and cancel an unfinished throw.
+- **Q:** quit the tracker.
 
-## Use the second laptop
+When the airplane is no longer tracked, the flight ends and its graph freezes.
+Press Space to begin the next throw.
 
-Connect both laptops to the same Wi-Fi network. On the tracking Mac, find its
-local address with:
+## Explore the Flight Log
+
+### Flights
+
+The log keeps the **50 most recent completed flights** lasting at least **0.50 seconds**.
+Shorter detections are excluded as likely mishaps.
+
+- Filter by plane with **All planes**.
+- Click a name to rename it. Enter or clicking away saves; Escape cancels.
+- Open **⋯** for Rename and **Move to plane…**.
+- Drag a flight's dotted grip to reveal a category tray; drop onto a plane or **Unassigned**.
+- Choose **Compare** to select up to five translucent overlays. **Done** hides controls without removing overlays.
+- **Clear comparisons** removes overlays, not saved flights.
+- **Replay** animates the recorded path with pause, scrubbing, and 0.5× / 1× / 2× speeds.
+- **Video** opens the recorded camera view after encoding finishes.
+
+Replays and videos never change the current score or trigger spoken commentary.
+
+### Planes
+
+Use **+ Add plane** to create a profile. Each row shows its saved flight count and
+best score. Drag grips reorder the list; **⋯ → Move up/down** is an alternative.
+Up to **30 profiles** can exist in a session.
+
+The shared **Next throw** selector determines the plane recorded when you arm a
+throw. Changing it during flight affects the next throw. Moving a saved flight
+to another category does not change this selection.
+
+## Optional ElevenLabs flight coach
+
+On macOS, run the one-time secure credential setup:
 
 ```bash
-ipconfig getifaddr en0
+python code/configure_voice.py
 ```
 
-On the second laptop, open `http://TRACKING_LAPTOP_IP:8000`, replacing the
-placeholder with that address. The dashboard runs locally and does not require
-internet access.
+The key is stored in **macOS Keychain**, never source files or the browser.
+Alternatively, provide `ELEVENLABS_API_KEY` through your environment. Never
+commit API keys; rotate any key that has been exposed.
 
-## Dashboard measurements
+Start the tracker normally, then enable **Flight coach** in the dashboard's top
+bar. Your click enables browser audio. It automatically speaks once per completed
+flight while enabled. Disabling it stops playback and prevents new requests from
+that browser; requests already generating may still consume credits.
 
-### Flight history and trajectory replay
+The default voice is George (`JBFqnCBsd6RMkjVDRZzb`), configurable through
+`ELEVENLABS_VOICE_ID`. Enable Text to Speech access on the API key.
 
-The **Flight Log** has **Flights** and **Planes** tabs. Its shared **Next throw**
-selector is the only control for selecting the upcoming flight's plane. Selection
-is captured when you arm the tracker; changes during flight affect the next throw.
-In **Planes**, click **+ Add plane** to reveal the name form. Drag dotted grips to
-reorder profiles, or use each plane's **⋯** menu to move it up/down. Rows show flight
-counts, best scores, and a badge for the plane selected for the next throw.
+**How AI is used:** ElevenLabs turns a short, scripted, score-based message into
+speech. It does not calculate the score or predict the flight. Only that text is
+sent to ElevenLabs—not camera footage. Feedback is general coaching, not a
+diagnosis of the airplane's design.
 
-In **Flights**, filter by plane using **All planes**. Click a flight name to rename
-it, or open its **⋯** menu for Rename and **Move to plane…**. Drag a flight's small
-grip to reveal a temporary category tray, then drop onto a plane or **Unassigned**.
-The tray appears only during dragging. Moving saved flights does not change the
-next throw selection. Filtering preserves graph comparisons. Profiles and their
-order are shared across both laptops and clear on tracker restart (up to 30).
+## Local recordings & privacy
 
-The left panel keeps the last 50 completed flights lasting at least 0.50 seconds,
-newest first. History resets when the tracker process restarts (not when the browser
-refreshes). Collapse or expand it with the animated arrow; reduced-motion preferences
-are respected. Click a flight name to edit it, then press Enter or click away to save.
-Escape cancels; names must contain 1–60 characters and update on both laptops.
-Click **Compare** to reveal selection checkboxes and add up to five color-coded,
-translucent paths over the graph. **Done** hides selection controls but keeps the
-overlays. **Clear comparisons** removes overlays without deleting history.
+Recording begins at the first tracked detection, not while waiting for a throw.
+Clearing or rearming discards an unfinished recording.
 
-Press a flight's **Replay** to animate its recorded path on the same graph. Pause,
-resume, scrub the timeline, or choose 0.5× / 1× / 2× playback. Replay never replaces
-live tracking, changes the current score, or requests spoken commentary. Closing
-replay leaves that flight's full comparison path visible.
+- **Format:** H.264 MP4, no audio, up to 15 seconds per throw, at most 640 pixels wide and 20 fps.
+- **Storage cap:** 100 MiB of completed clips, with a 10 MiB cap per clip. Oldest clips expire first; scores and paths remain.
+- **Capture buffer:** an additional bounded 8 MiB JPEG buffer and one background encoding job. Limited clips are marked as shortened; if encoding is unavailable or busy, tracking continues without a clip.
+- **Session-only:** profiles, history, and completed clips live in tracker memory and clear when Python restarts. Refreshing the browser does not clear them.
+- **Temporary encoding:** OpenCV uses a local scratch MP4 during encoding, removed immediately afterward. Footage is not uploaded to cloud services.
 
-History lives only in tracker memory and is shared with both laptops through
-`/api/history`. The previous `.skytrace/flights.sqlite3` file is no longer read or
-written. History JSON contains positions, sample times, metrics and video availability,
-never encoded video, audio, or API keys. Flights
-recorded before this feature was installed cannot be recovered automatically.
-Different frame resolutions are normalized for overlays; comparisons only make
-sense with the same camera position and view, and are not physical-distance measurements.
+Clips also expire when their flight leaves the 50-flight log. Older throws cannot
+gain recordings retroactively. The previous `.skytrace/flights.sqlite3` history
+file is no longer read or written.
 
-### Session-only flight videos
+Although only one laptop is needed, the development server is reachable on the
+local network. Anyone who can access it can view that session's dashboard and
+clips. **Do not expose it to the public internet.**
 
-Each new saved throw gets a **Video** action after background encoding completes.
-Open it to watch the mirrored camera view with its tracked path and final score.
-The native player supports seeking, pause, fullscreen and playback speed where
-supported. This is separate from trajectory Replay and never triggers the voice
-coach or changes the live graph. Recording starts with the first tracked detection,
-not while waiting for a throw; clearing or rearming discards an unfinished recording.
-Throws under 0.50 seconds are still excluded from history and video storage.
+## Understanding the measurements
 
-- H.264 MP4, no audio, up to 15 seconds per throw, at most 640 pixels wide and 20 fps.
-- Saved clips have a **100 MiB** total budget. Oldest clips expire first; their
-  flight metrics and paths remain. Clips also disappear when their flight leaves
-  the 50-flight log. Each encoded clip is capped at 10 MiB.
-- Capture uses an additional bounded 8 MiB JPEG buffer and one background encoding
-  job. Duration/buffer-limited recordings are marked as shortened in the viewer.
-  If the encoder is unavailable or still busy, tracking continues without a clip.
-- Completed clips live only in tracker RAM and clear when the process restarts.
-  OpenCV uses a temporary local scratch MP4 during encoding, removed immediately
-  afterward. No recording is uploaded to cloud services or sent to ElevenLabs.
-- Videos are served by the same local dashboard to your connected laptops. Anyone
-  who can access that dashboard on your LAN can also watch its session clips;
-  don't expose this development server to the public internet.
+The **solid yellow line** is observed motion; the **dashed blue line** is a
+forecast. Comparison paths appear as translucent colored lines.
 
-Restart the Python tracker after installing this feature, then refresh the website.
-Older logged flights cannot gain recordings retroactively.
+Speed and distance use **camera pixels**, not meters. The angle comes from recent
+tracked positions. Prediction uses a simplified 2D motion model, not a complete
+aerodynamic simulation.
 
-### Graph
+The graph distinguishes launch, last observed position, estimated frame exit,
+and estimated landing at the model's ground reference. **Leaving the camera is
+not a measured landing.** Real-world measurements require calibration, and
+meaningful comparisons require a consistent camera position and view.
 
-- Solid yellow line: measured trajectory
-- Dashed blue line: predicted future path
-- Speed: camera pixels per second
-- Angle: direction calculated from recent tracked points
-- Landing position and remaining airtime: continuously updated 2D estimate
+## Built with
 
-The current prediction is intentionally camera-relative. Converting pixels to
-meters requires camera calibration against an object of known size.
+| Component | Technology |
+| --- | --- |
+| Tracking, scoring & forecasting | Python, OpenCV, NumPy |
+| Local dashboard server | Python standard library |
+| Dashboard & trajectory graphics | HTML, CSS, JavaScript, SVG |
+| Physical scoreboard | Arduino, LiquidCrystal, USB serial via pyserial |
+| Spoken feedback | ElevenLabs Text to Speech API |
+| Video recording | OpenCV, H.264 MP4 |
 
-Completed results are frozen. Voice requests carry the run ID, flight ID, and
-exact score; mismatches are rejected. Audio URLs are unique per tracker run and
-are never browser-cached, preventing old scores from being spoken after a restart.
-The graph retains the original launch point, breaks lines at invalid samples or
-large jumps, and distinguishes the last observed position, an estimated frame
-exit, and an estimated landing at the model's ground reference (90% of frame height).
+## Testing & troubleshooting
+
+Run checks from the repository root with the virtual environment active:
+
+```bash
+python -m unittest discover -s code -p 'test_*.py'
+node code/test_coach.cjs
+```
+
+Node.js is needed only for the JavaScript checks, not to run the dashboard.
+
+- **Camera won't open:** close other apps using it and check camera permissions.
+- **Plane isn't detected:** check yellow markings, lighting, background, and the detection-mask window.
+- **Dashboard isn't updating:** confirm Python is running and use its printed URL.
+- **LCD isn't updating:** check wiring, serial port, matching sketch, and that Serial Monitor is closed.
+- **Voice isn't playing:** enable Flight coach; check credentials, internet access, and API credits.
+- **Video unavailable:** clips may be encoding, expired, or unavailable because the encoder is unsupported or busy.
+
+Restart the tracker after installing code updates, then refresh the website.
+
+---
+
+**SkyTrace · HackPHS 2026 · Into the Skies**

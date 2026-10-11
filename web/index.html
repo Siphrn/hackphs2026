@@ -133,7 +133,6 @@
     .plane-pick span { display: block; overflow-wrap: anywhere; }
     .plane-pick small { color: var(--muted); font-size: 10px; }
     .plane-grip { cursor: grab; color: var(--muted); padding: 3px; touch-action: none; user-select: none; }
-    .plane-move { padding: 3px 5px; font-size: 11px; }
     .plane-select { margin: 6px 0; }
     .plane-filter-label { display: block; margin-top: 14px; font-size: 11px; color: var(--muted); }
     .history-list { display: grid; gap: 9px; max-height: min(64vh, 640px); overflow-y: auto; scrollbar-width: thin; padding-right: 3px; }
@@ -174,23 +173,29 @@
     .history-actions label { margin-right: auto; font-size: 11px; }
     .history-actions button { border: 0; background: none; padding: 3px 5px; color: var(--muted); }
     .history-actions button:hover { color: var(--text); }
+    .history-actions .video-button { border: 1px solid var(--line); background: var(--panel-soft); border-radius: 6px; padding: 5px 9px; color: var(--text); }
+    .history-actions .video-button:hover { border-color: var(--green); color: var(--green); }
+    .trash-button { flex: 0 0 auto; width: 28px; height: 28px; display: inline-grid; place-items: center; padding: 0 !important; border: 1px solid color-mix(in srgb, var(--red) 42%, transparent) !important; border-radius: 6px; background: color-mix(in srgb, var(--red) 8%, transparent) !important; color: var(--red) !important; line-height: 1; }
+    .trash-button:hover { border-color: var(--red) !important; background: color-mix(in srgb, var(--red) 16%, transparent) !important; }
+    .trash-button svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
     .flight-drag-handle { position: absolute; top: 11px; left: 0; width: 16px; border: 0; padding: 2px 0; margin: 0; }
-    .log-menu { position: relative; }
-    .log-menu summary { cursor: pointer; color: var(--muted); list-style: none; padding: 2px 5px; border-radius: 4px; }
+    .log-menu { position: relative; flex: 0 0 auto; }
+    .log-menu summary { cursor: pointer; color: var(--muted); list-style: none; min-width: 28px; height: 28px; display: grid; place-items: center; padding: 0; border: 1px solid transparent; border-radius: 6px; }
+    .log-menu summary:hover, .log-menu[open] summary { color: var(--text); border-color: var(--line); background: var(--panel-soft); }
     .log-menu summary::-webkit-details-marker { display: none; }
     .log-menu summary:focus-visible { outline: 1px solid var(--green); outline-offset: -1px; }
-    .log-menu-content { padding: 8px; margin: 6px 0; background: var(--panel-soft); border-radius: 7px; display: grid; gap: 5px; }
-    .log-menu-content button { text-align: left; border: 0; background: none; padding: 5px; }
+    .log-menu-content { position: absolute; z-index: 30; right: 0; top: calc(100% + 6px); width: 190px; padding: 10px; margin: 0; border: 1px solid var(--line); background: #14231c; border-radius: 9px; display: grid; gap: 8px; box-shadow: 0 12px 30px #0009; }
+    .log-menu-content button { width: 100%; text-align: left; border: 1px solid transparent; background: none; padding: 7px 8px; }
+    .log-menu-content button:hover { border-color: var(--line); background: rgba(255,255,255,.035); }
     .log-menu-content label { font-size: 11px; color: var(--muted); }
-    .history-item > .log-menu > summary { position: absolute; right: 0; top: -26px; }
-    .history-item .history-actions { padding-right: 26px; }
+    .log-menu-content .plane-select { margin: 0; }
+    .history-actions .log-menu-content { right: 0; }
     .plane-list { gap: 0; max-height: min(50vh, 400px); }
     .plane-card { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: none; padding: 10px 0; gap: 8px; }
     .plane-card.active { background: none; border-color: var(--line); }
     .plane-pick { cursor: default; font-size: 12px; padding: 0; }
     .plane-pick small { display: block; margin-top: 4px; font-size: 11px; line-height: 1.5; }
     .plane-card.active .plane-pick span::after { content: 'Next throw'; display: block; color: var(--green); font-size: 10px; margin-top: 3px; }
-    .plane-card .log-menu { flex-shrink: 0; }
     .add-plane-button { width: 100%; margin-top: 8px; background: var(--green); color: var(--bg); border-color: transparent; }
     .log-footer { border-top: 1px solid var(--line); padding-top: 12px; margin: 12px 0 0; font-size: 11px; color: var(--muted); }
     #history-status { font-size: 11px; line-height: 1.5; margin: 8px 0; color: var(--green); overflow-wrap: anywhere; }
@@ -209,13 +214,6 @@
     .clip-dialog video { display: block; width: 100%; max-height: 60vh; border-radius: 8px; background: #050907; }
     .clip-dialog p { color: var(--muted); font-size: 12px; line-height: 1.5; }
     .comparison-path { fill: none; stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; opacity: .3; }
-    #replay-marker { stroke: var(--panel); stroke-width: 2; }
-    .replay-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 12px; padding: 10px; border: 1px solid var(--line); border-radius: 9px; font-size: 12px; }
-    .replay-bar[hidden] { display: none; }
-    #replay-title { color: var(--green); }
-    #replay-scrub { flex: 1; min-width: 100px; accent-color: var(--green); }
-    #replay-speed { border: 1px solid var(--line); border-radius: 5px; color: var(--text); background: var(--panel-soft); padding: 5px; }
-
     .hero {
       display: flex;
       align-items: end;
@@ -446,7 +444,7 @@
           </section>
           <p id="history-status" class="supporting" role="status"></p>
           <button id="log-retry" type="button" hidden>Try again</button>
-          <p class="log-footer"><span title="Flights and profiles clear when the tracker restarts. Throws under 0.50 seconds are excluded.">Session only</span> · <span id="log-total">0 flights</span></p>
+          <p class="log-footer"><span title="Flights, profiles, and videos are saved in this project's local .skytrace folder.">Saved locally</span> · <span id="log-total">0 flights</span></p>
           </div>
         </div>
       </aside>
@@ -480,7 +478,6 @@
               <g id="comparison-lines"></g>
               <path id="observed-line" d="" vector-effect="non-scaling-stroke"></path>
               <path id="predicted-line" d="" vector-effect="non-scaling-stroke"></path>
-              <circle id="replay-marker" cx="0" cy="0" r="0"></circle>
             </g>
             <circle id="launch-marker" cx="0" cy="0" r="0"></circle>
             <circle id="landing-zone" cx="0" cy="0" r="0"></circle>
@@ -493,14 +490,6 @@
         </div>
         <p class="supporting" style="margin:12px 2px 0">Camera-relative path · dashed line is a forecast · last seen is not a measured landing</p>
         <p id="comparison-note"></p>
-        <div id="replay-bar" class="replay-bar" hidden>
-          <span id="replay-title">Replay</span>
-          <button id="replay-pause" type="button">Pause</button>
-          <input id="replay-scrub" type="range" min="0" max="1000" value="0" aria-label="Replay position">
-          <span id="replay-clock">0.00 / 0.00 s</span>
-          <select id="replay-speed" aria-label="Replay speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select>
-          <button id="replay-close" type="button" aria-label="Close replay">Close</button>
-        </div>
       </article>
 
       <aside class="card prediction">
@@ -530,7 +519,7 @@
     <video id="clip-video" controls playsinline preload="metadata" aria-label="Recorded flight with tracking overlay"></video>
     <p id="clip-description"></p>
     <p id="clip-status" role="status"></p>
-    <p>Local recording · no audio · session only · oldest clips expire at 100 MB</p>
+    <p>Local recording · no audio · saved on this laptop · oldest clips expire at 100 MB</p>
   </dialog>
 
   <script>
@@ -552,9 +541,6 @@
     const selectedHistory = new Set();
     const overlayColors = ["#b79bff", "#ff9fcf", "#75dfcf", "#ffa66b", "#88b8ff"];
     const overlayAssignments = new Map();
-    let replay = null;
-    let replayFrame = null;
-    let lastReplayTick = null;
     let historySignature = "";
     let historyLoading = false;
     let historyPollKey = null;
@@ -585,7 +571,7 @@
       closeVideo();
       currentVideo = {id:flight.history_id, session:latestData.session_id};
       byId("clip-title").textContent = `${flightName(flight)} · ${Math.round(number(flight.score))}/100`;
-      byId("clip-description").textContent = `${number(flight.video_duration).toFixed(2)} s recording${flight.video_truncated ? " · shortened to the recording limit" : ""}. Replay shows the tracked camera view; it does not change the live flight.`;
+      byId("clip-description").textContent = `${number(flight.video_duration).toFixed(2)} s recording${flight.video_truncated ? " · shortened to the recording limit" : ""}. Includes up to 1 second before detection and 1 second after the flight.`;
       byId("clip-status").textContent = "";
       byId("clip-video").src = `/api/video/${encodeURIComponent(currentVideo.session)}/${encodeURIComponent(currentVideo.id)}.mp4`;
       byId("clip-dialog").showModal();
@@ -658,6 +644,18 @@
         if (event.key === "Escape") { details.open = false; openLogMenu = null; summary.focus(); }
       });
       return {details, content};
+    }
+
+    function makeTrashButton(label, onClick) {
+      const button = document.createElement("button");
+      button.type = "button"; button.className = "trash-button"; button.title = label;
+      button.setAttribute("aria-label", label);
+      const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      icon.setAttribute("viewBox", "0 0 24 24"); icon.setAttribute("aria-hidden", "true");
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("d", "M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5");
+      icon.append(path); button.append(icon); button.addEventListener("click", onClick);
+      return button;
     }
 
     function showDropTray() {
@@ -742,13 +740,47 @@
           const flight = historyFlights.find(f => f.history_id === values.history_id);
           if (flight) flight.profile_id = values.profile_id;
         }
+        if (action === "delete") {
+          const deletedIds = new Set(historyFlights.filter(flight => flight.profile_id === values.profile_id).map(flight => flight.history_id));
+          if (currentVideo && deletedIds.has(currentVideo.id)) closeVideo();
+          for (const identifier of deletedIds) { selectedHistory.delete(identifier); overlayAssignments.delete(identifier); }
+          historyFlights = historyFlights.filter(flight => !deletedIds.has(flight.history_id));
+          historySignature = "";
+          if (profileFilter === values.profile_id) profileFilter = "all";
+          renderComparisons();
+        }
         renderProfiles(); renderHistory();
-        logStatus(action === "select" || action === "create" ? "Next throw updated." : "Saved.");
+        logStatus(action === "select" || action === "create" ? "Next throw updated." : action === "delete" ? "Plane, flights, and videos deleted." : "Saved.");
         return true;
       } catch (error) {
-        logStatus("Couldn’t save. Maximum 30 planes per session.", true, () => changeProfile(action, values));
+        logStatus(action === "create" ? "Couldn’t add plane. Maximum 30 planes." : "Couldn’t save that change.", true, () => changeProfile(action, values));
         return false;
       } finally { profileBusy = false; }
+    }
+
+    async function deleteFlight(flight) {
+      if (!window.confirm(`Delete ${flightName(flight)} and its saved video?`)) return;
+      logStatus("Deleting flight…");
+      try {
+        const response = await fetch("/api/history/delete", {method:"POST", headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({session_id:latestData?.session_id, history_id:flight.history_id})});
+        if (!response.ok) throw new Error("Delete failed");
+        if (currentVideo?.id === flight.history_id) closeVideo();
+        selectedHistory.delete(flight.history_id); overlayAssignments.delete(flight.history_id);
+        historyFlights = historyFlights.filter(item => item.history_id !== flight.history_id);
+        historySignature = "";
+        renderHistory(); renderComparisons(); renderProfiles();
+        logStatus("Flight and video deleted.");
+      } catch (error) {
+        logStatus("Couldn’t delete that flight.", true, () => deleteFlight(flight));
+      }
+    }
+
+    async function deleteProfile(plane) {
+      const count = historyFlights.filter(flight => flight.profile_id === plane.id).length;
+      const detail = count ? ` This also permanently deletes ${count} assigned ${count === 1 ? "flight" : "flights"} and their videos.` : "";
+      if (!window.confirm(`Delete ${plane.name}?${detail}`)) return;
+      await changeProfile("delete", {profile_id:plane.id});
     }
 
     function profileOptions(select, current, filter = false) {
@@ -770,7 +802,7 @@
 
     function renderProfiles() {
       if (draggedProfile || draggedFlightId || openLogMenu) return;
-      const cards = planeProfiles.map((plane, index) => {
+      const cards = planeProfiles.map(plane => {
         const card = document.createElement("div");
         card.className = `plane-card${activeProfileId === plane.id ? " active" : ""}`;
         card.setAttribute("data-plane-id", plane.id);
@@ -805,15 +837,7 @@
         stats.textContent = `${flights.length} ${flights.length === 1 ? "flight" : "flights"}${flights.length ? " · best " + Math.max(...flights.map(f => number(f.score))) : ""}`;
         pick.append(name, stats);
         card.append(grip, pick);
-        const menu = makeLogMenu(`Options for ${plane.name}`);
-        for (const [offset, symbol, direction] of [[-1,"↑","up"],[1,"↓","down"]]) {
-          const move = document.createElement("button"); move.type = "button"; move.className = "plane-move";
-          move.textContent = symbol; move.setAttribute("aria-label", `Move ${plane.name} ${direction}`);
-          move.disabled = index + offset < 0 || index + offset >= planeProfiles.length;
-          move.textContent = `Move ${direction}`;
-          move.addEventListener("click", () => { menu.details.open = false; openLogMenu = null; reorderProfile(plane.id, planeProfiles[index + offset].id); }); menu.content.append(move);
-        }
-        card.append(menu.details);
+        card.append(makeTrashButton(`Delete plane ${plane.name}`, () => deleteProfile(plane)));
         return card;
       });
       if (!cards.length) {
@@ -926,20 +950,15 @@
         const labelText = document.createElement("span");
         labelText.textContent = "Compare";
         label.append(checkbox, labelText);
-        const button = document.createElement("button");
-        button.type = "button";
-        button.textContent = "Replay";
-        button.setAttribute("aria-label", `Replay ${flightName(flight)} from ${meta.textContent}`);
-        button.disabled = !Array.isArray(flight.trajectory) || !flight.trajectory.some(validPoint);
-        button.addEventListener("click", () => startReplay(flight.history_id));
-        actions.append(label, button);
-        const video = document.createElement("button"); video.type = "button";
+        actions.append(label);
+        const video = document.createElement("button"); video.type = "button"; video.className = "video-button";
         video.textContent = flight.video_status === "pending" ? "Encoding…" : "Video";
         video.setAttribute("aria-label", `Watch video of ${flightName(flight)}`);
         video.disabled = flight.video_status !== "ready";
         video.title = flight.video_status === "ready" ? "Watch tracked throw" : flight.video_status === "pending"
           ? "Preparing recording…" : flight.video_status === "expired" ? "Recording expired to free storage; trajectory is still available." : "No recording available for this throw.";
         video.addEventListener("click", () => openVideo(flight)); actions.append(video);
+        actions.append(makeTrashButton(`Delete flight ${flightName(flight)}`, () => deleteFlight(flight)));
         const menu = makeLogMenu(`Options for ${flightName(flight)}`);
         const rename = document.createElement("button"); rename.type = "button"; rename.textContent = "Rename";
         rename.addEventListener("click", () => { menu.details.open = false; openLogMenu = null; editFlightName(flight, name); });
@@ -954,7 +973,8 @@
           renderHistory();
         });
         menu.content.append(rename, moveLabel, assignment);
-        card.append(head, meta, actions, menu.details);
+        actions.append(menu.details);
+        card.append(head, meta, actions);
         const grip = document.createElement("button"); grip.type = "button"; grip.className = "flight-drag-handle";
         grip.textContent = "⠿"; grip.title = "Drag to move to a plane";
         grip.setAttribute("aria-label", `Drag ${flightName(flight)} to a plane profile, or use its profile dropdown`);
@@ -990,7 +1010,7 @@
           activeProfileId = result.active_profile_id || null;
           profilesSignature = nextProfilesSignature;
         }
-        const flights = Array.isArray(result.flights) ? result.flights.filter(flight => number(flight.airtime) >= .5) : [];
+        const flights = Array.isArray(result.flights) ? result.flights : [];
         const signature = JSON.stringify(flights.map(flight => [flight.history_id, flight.name, flight.profile_id, flight.video_status]));
         if (currentVideo && (currentVideo.session !== result.session_id || !flights.some(f => f.history_id === currentVideo.id && f.video_status === "ready"))) {
           closeVideo(); logStatus("That recording has expired.");
@@ -999,7 +1019,6 @@
           historyFlights = flights;
           historySignature = signature;
           for (const id of selectedHistory) if (!flights.some(flight => flight.history_id === id)) selectedHistory.delete(id);
-          if (replay && !flights.some(flight => flight.history_id === replay.id)) closeReplay();
           renderHistory();
           renderComparisons();
           renderProfiles();
@@ -1028,7 +1047,6 @@
       else {
         selectedHistory.delete(id);
         overlayAssignments.delete(id);
-        if (replay?.id === id) closeReplay();
       }
       byId("history-status").textContent = "";
       byId("clear-comparisons").disabled = selectedHistory.size === 0;
@@ -1036,32 +1054,14 @@
       return true;
     }
 
-    function replayDuration(flight) {
-      const times = Array.isArray(flight.trajectory_times) ? flight.trajectory_times : [];
-      return Math.max(.1, number(flight.airtime), number(times.at(-1)));
-    }
-
-    function replayPoints(flight, time) {
-      const points = Array.isArray(flight.trajectory) ? flight.trajectory : [];
-      const times = flight.trajectory_times;
-      const duration = replayDuration(flight);
-      return points.filter((_, index) => {
-        const t = Array.isArray(times) && times.length === points.length
-          ? number(times[index]) : index / Math.max(1, points.length - 1) * duration;
-        return t <= time;
-      });
-    }
-
     function renderComparisons() {
       const width = Math.max(160, number(latestData?.frame_width, 640));
       const height = Math.max(120, number(latestData?.frame_height, 480));
       const paths = [];
       const names = [];
-      let replayPoint = null;
       for (const flight of historyFlights) {
         if (!selectedHistory.has(flight.history_id)) continue;
-        const playing = replay?.id === flight.history_id;
-        const points = playing ? replayPoints(flight, replay.time) : flight.trajectory || [];
+        const points = flight.trajectory || [];
         const normalized = points.map(point => validPoint(point)
           ? [point[0] / Math.max(1, number(flight.frame_width, 640)) * width,
              point[1] / Math.max(1, number(flight.frame_height, 480)) * height] : null);
@@ -1070,60 +1070,11 @@
         path.setAttribute("d", pathString(normalized, width, height));
         path.setAttribute("stroke", historyColor(flight.history_id));
         path.setAttribute("vector-effect", "non-scaling-stroke");
-        if (playing) {
-          path.style.opacity = ".65";
-          replayPoint = normalized.filter(validPoint).at(-1);
-        }
         paths.push(path);
         names.push(`${flightName(flight)} (${Math.round(number(flight.score))})`);
       }
       byId("comparison-lines").replaceChildren(...paths);
       byId("comparison-note").textContent = names.length ? `Overlays: ${names.join(" · ")} · aligned to camera frame, not physical distance` : "";
-      const marker = byId("replay-marker");
-      marker.setAttribute("cx", replayPoint?.[0] ?? 0);
-      marker.setAttribute("cy", replayPoint?.[1] ?? 0);
-      marker.setAttribute("r", replayPoint ? width * .012 : 0);
-      marker.setAttribute("fill", replay ? historyColor(replay.id) : "transparent");
-      byId("replay-bar").hidden = !replay;
-      if (replay) {
-        const flight = historyFlights.find(flight => flight.history_id === replay.id);
-        const duration = replayDuration(flight);
-        byId("replay-title").textContent = `${flightName(flight)} replay`;
-        byId("replay-clock").textContent = `${replay.time.toFixed(2)} / ${duration.toFixed(2)} s`;
-        byId("replay-scrub").value = Math.round(replay.time / duration * 1000);
-        byId("replay-pause").textContent = replay.playing ? "Pause" : replay.time >= duration ? "Restart" : "Resume";
-      }
-    }
-
-    function animateReplay(timestamp) {
-      replayFrame = null;
-      if (!replay?.playing) return;
-      const flight = historyFlights.find(flight => flight.history_id === replay.id);
-      if (!flight) { closeReplay(); return; }
-      const elapsed = lastReplayTick === null ? 0 : Math.min(.1, (timestamp - lastReplayTick) / 1000);
-      lastReplayTick = timestamp;
-      replay.time = Math.min(replayDuration(flight), replay.time + elapsed * number(byId("replay-speed").value, 1));
-      if (replay.time >= replayDuration(flight)) replay.playing = false;
-      renderComparisons();
-      if (replay.playing) replayFrame = requestAnimationFrame(animateReplay);
-    }
-
-    function startReplay(id) {
-      if (!setComparison(id, true)) return;
-      if (replayFrame !== null) cancelAnimationFrame(replayFrame);
-      replay = {id, time:0, playing:true};
-      lastReplayTick = null;
-      renderHistory();
-      renderComparisons();
-      replayFrame = requestAnimationFrame(animateReplay);
-    }
-
-    function closeReplay() {
-      if (replayFrame !== null) cancelAnimationFrame(replayFrame);
-      replayFrame = null;
-      replay = null;
-      lastReplayTick = null;
-      renderComparisons();
     }
 
     byId("history-toggle").addEventListener("click", () => {
@@ -1135,25 +1086,7 @@
       byId("dashboard-shell").classList.toggle("history-collapsed", expanded);
     });
     byId("clear-comparisons").addEventListener("click", () => {
-      selectedHistory.clear(); overlayAssignments.clear(); closeReplay(); renderHistory();
-    });
-    byId("replay-close").addEventListener("click", closeReplay);
-    byId("replay-pause").addEventListener("click", () => {
-      if (!replay) return;
-      const flight = historyFlights.find(flight => flight.history_id === replay.id);
-      if (replay.time >= replayDuration(flight)) replay.time = 0;
-      replay.playing = !replay.playing;
-      if (replayFrame !== null) cancelAnimationFrame(replayFrame);
-      replayFrame = null; lastReplayTick = null;
-      renderComparisons();
-      if (replay.playing) replayFrame = requestAnimationFrame(animateReplay);
-    });
-    byId("replay-scrub").addEventListener("input", () => {
-      if (!replay) return;
-      const flight = historyFlights.find(flight => flight.history_id === replay.id);
-      replay.time = number(byId("replay-scrub").value) / 1000 * replayDuration(flight);
-      lastReplayTick = null;
-      renderComparisons();
+      selectedHistory.clear(); overlayAssignments.clear(); renderComparisons(); renderHistory();
     });
 
     function stopCoach() {

@@ -72,6 +72,15 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(self.request("POST", "/api/history/rename", dict(body, session_id="old"))[0], 409)
         self.assertEqual(self.request("POST", "/api/history/rename", dict(body, history_id="gone"))[0], 404)
 
+    def test_delete_flight_endpoint(self):
+        self.state.update(status="COMPLETE", airtime=.1, score=20)
+        identifier = self.state.history()[0]["history_id"]
+        body = dict(history_id=identifier, session_id=self.voice.session_id)
+        self.assertEqual(self.request("POST", "/api/history/delete", dict(body, session_id="old"))[0], 409)
+        self.assertEqual(self.request("POST", "/api/history/delete", body)[0], 200)
+        self.assertEqual(self.state.history(), [])
+        self.assertEqual(self.request("POST", "/api/history/delete", body)[0], 404)
+
     def test_profile_endpoint(self):
         body = dict(action="create", name="Dart", session_id=self.voice.session_id)
         self.assertEqual(self.request("POST", "/api/profiles", dict(body, session_id="old"))[0], 409)
@@ -86,6 +95,9 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(json.loads(payload)["session_id"], self.voice.session_id)
         self.assertEqual(self.request("POST", "/api/profiles", dict(body, action="reorder", order=[]))[0], 400)
         self.assertEqual(self.request("POST", "/api/profiles", dict(body, action="assign", history_id="missing", profile_id=identifier))[0], 404)
+        status, _, payload = self.request("POST", "/api/profiles", dict(body, action="delete", profile_id=identifier))
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(payload)["profiles"], [])
 
     def test_video_endpoint_session_and_ranges(self):
         self.state.update(status="COMPLETE", airtime=1)

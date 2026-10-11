@@ -1,10 +1,39 @@
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from dashboard_server import DashboardState
 from flight_history import FlightHistory
 
 
 class HistoryTests(unittest.TestCase):
+    def test_local_persistence_and_deletion(self):
+        with TemporaryDirectory() as directory:
+            archive = FlightHistory(storage_directory=directory)
+            archive.change_profile("create", name="Dart")
+            profile_id = archive.profiles()["active_profile_id"]
+            history_id = archive.save(dict(flight_id=7, airtime=.2, score=91,
+                                           profile_id=profile_id, video_status="pending"))
+            archive.rename(history_id, "Fast Dart")
+            archive.attach_video(history_id, b"local-video", .2, True)
+
+            restored = FlightHistory(storage_directory=directory)
+            self.assertEqual(restored.profiles()["profiles"], [{"id": profile_id, "name": "Dart"}])
+            self.assertEqual(restored.profiles()["active_profile_id"], profile_id)
+            self.assertEqual(restored.list()[0]["name"], "Fast Dart")
+            self.assertEqual(restored.list()[0]["video_status"], "ready")
+            self.assertEqual(restored.video(history_id), b"local-video")
+            self.assertEqual(DashboardState(restored).snapshot()["flight_id"], 7)
+
+            restored.change_profile("delete", profile_id=profile_id)
+            self.assertEqual(restored.profiles(), {"profiles": [], "active_profile_id": None})
+            self.assertEqual(restored.list(), [])
+            self.assertFalse((Path(directory) / "videos" / f"{history_id}.mp4").exists())
+            other_id = restored.save(dict(flight_id=8, airtime=.1, score=50, profile_id=None))
+            restored.delete(other_id)
+            self.assertEqual(restored.list(), [])
+            self.assertEqual(FlightHistory(storage_directory=directory).list(), [])
+
     def test_video_budget_eviction_and_history_pruning(self):
         archive = FlightHistory(limit=2, video_limit_bytes=10)
         first = archive.save(dict(airtime=1, video_status="pending"))
@@ -92,12 +121,15 @@ class HistoryTests(unittest.TestCase):
 
     def test_duration_boundary(self):
         archive = FlightHistory()
-        for duration in (0, .1, .499999, float("nan"), None):
+        for duration in (-1, float("nan"), None):
             self.assertIsNone(archive.save(dict(airtime=duration)))
         self.assertEqual(archive.list(), [])
+        self.assertIsNotNone(archive.save(dict(airtime=0)))
+        self.assertIsNotNone(archive.save(dict(airtime=.1)))
+        self.assertIsNotNone(archive.save(dict(airtime=.499999)))
         self.assertIsNotNone(archive.save(dict(airtime=.5)))
         self.assertIsNotNone(archive.save(dict(airtime=.501)))
-        self.assertEqual(len(archive.list()), 2)
+        self.assertEqual(len(archive.list()), 5)
 
     def test_rename_validation_and_isolation(self):
         archive = FlightHistory()

@@ -173,6 +173,7 @@ try:
                         flight_started = True
                         flight_complete = False
                         flight_start_time = current_time
+                        recorder.start(current_time)
                         print("Flight started!")
 
                     flight_points.append(center)
@@ -208,8 +209,9 @@ try:
         frame_height, frame_width = frame.shape[:2]
         prediction = predict_flight(flight_samples, frame_width, frame_height)
 
-        if flight_started and current_time - last_seen_time <= FLIGHT_END_TIMEOUT:
-            recorder.capture(frame, current_time - flight_start_time)
+        # Record continuously so completed clips include the second before
+        # detection and the second after the airplane leaves the camera.
+        recorder.observe(frame, current_time)
 
         if (
             flight_started
@@ -298,7 +300,12 @@ try:
             video_status="pending" if status == "COMPLETE" else "unavailable",
         )
         if flight_just_finished:
-            recorder.finish(dashboard_state.snapshot()["history_id"], last_score, last_airtime)
+            recorder.complete(
+                dashboard_state.snapshot()["history_id"],
+                last_score,
+                last_airtime,
+                last_seen_time,
+            )
 
         display_status = (
             "Press SPACE to arm"
@@ -334,7 +341,6 @@ try:
         )
 
         cv2.imshow("Paper Plane Tracker", frame)
-        cv2.imshow("Detection Mask", mask)
 
         key = cv2.waitKey(1) & 0xFF
 
@@ -342,7 +348,7 @@ try:
             break
 
         if key == ord("c"):
-            recorder.reset()
+            recorder.cancel()
             trajectory.clear()
             recent_centers.clear()
             flight_points.clear()
@@ -355,7 +361,6 @@ try:
             last_seen_time = None
 
         if key == ord(" "):
-            recorder.reset()
             flight_armed = True
             flight_started = False
             flight_complete = False

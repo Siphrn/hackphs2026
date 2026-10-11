@@ -25,7 +25,7 @@ class AudioContext {
   createBufferSource() {return {connect() {}, start() {plays++;}, stop() {stops++;}};}
 }
 const context = {
-  document: {body:element('body'),getElementById: element, createElement:()=>element(`node-${nodeCount++}`),createElementNS:()=>element(`node-${nodeCount++}`)}, window: {AudioContext,innerWidth:1280,innerHeight:720,scrollBy(){}}, setTimeout() {}, console,
+  document: {body:element('body'),getElementById: element, createElement:()=>element(`node-${nodeCount++}`),createElementNS:()=>element(`node-${nodeCount++}`)}, window: {AudioContext,innerWidth:1280,innerHeight:720,scrollBy(){},confirm(){return true;}}, setTimeout() {}, console,
   requestAnimationFrame(){return 1;},cancelAnimationFrame(){},
   fetch: async (url, options) => {
     if (url === '/api/voice') requests++;
@@ -38,6 +38,15 @@ vm.runInContext(html.match(/<script>([\s\S]*?)<\/script>/)[1], context);
 const flush = () => new Promise(resolve => setImmediate(resolve));
 (async () => {
   await flush(); // Let the dashboard's initial refresh finish.
+  const initialFetch = context.fetch;
+  context.fetch = async url => ({ok:true, json:async()=>url === '/api/history' ? {
+    session_id:'short-flight-session', profiles:[], active_profile_id:null,
+    flights:[{history_id:'short-flight',flight_id:1,score:0,airtime:.1,trajectory:[]}]
+  } : {status:'READY',session_id:'short-flight-session',voice:{}}});
+  await vm.runInContext('refreshHistory()', context);
+  assert.equal(vm.runInContext('historyFlights.length', context), 1, 'Flights shorter than 0.50 seconds must remain visible');
+  assert.equal(vm.runInContext('historyFlights[0].history_id', context), 'short-flight');
+  context.fetch = initialFetch;
   vm.runInContext(`function completed(id, score, status) { return {status:'COMPLETE', session_id:'run-a', flight_id:id, score, voice:{status, configured:true, session_id:'run-a', flight_id:id, score, audio_url:'/api/voice/run-a/'+id+'.mp3'}}; } renderVoice(completed(1,73,'idle'))`, context);
   assert.equal(requests, 0);
   element('voice-enabled').checked = true;
@@ -84,23 +93,17 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
   assert.equal(element('observed-line').attributes.d, '');
   vm.runInContext(`historyFlights = [1,2,3,4,5,6].map(id=>({history_id:'saved-'+id,flight_id:id,score:80+id,airtime:1,frame_width:320,frame_height:240,trajectory:[[20,40],[30,50],[40,60]],trajectory_times:[0,.4,1],completed_at:'2026-10-10T20:00:00Z'}));renderHistory();setComparison('saved-1',true)`, context);
   assert.equal(element('history-list').children.length, 6);
+  assert.equal(element('history-list').children[0].children[2].children[1].className, 'video-button');
+  assert.equal(element('history-list').children[0].children[2].children[2].className, 'trash-button');
   assert.equal(element('comparison-lines').children.length, 1);
   assert(element('comparison-lines').children[0].attributes.d.includes('M40,80'), 'History must scale to current camera frame');
-  const livePath = element('observed-line').attributes.d;
-  const requestsBeforeReplay = requests;
-  vm.runInContext(`startReplay('saved-1');animateReplay(0);animateReplay(100);`, context);
-  assert.equal(element('replay-bar').hidden, false);
-  assert.equal(element('comparison-lines').children[0].attributes.d, 'M40,80');
-  element('replay-scrub').value = '1000';
-  element('replay-scrub').input();
   assert(element('comparison-lines').children[0].attributes.d.includes('L80,120'));
-  assert.equal(element('observed-line').attributes.d, livePath, 'Replay must not overwrite live path');
-  assert.equal(requests, requestsBeforeReplay, 'Replay must never request paid narration');
+  assert(!html.includes('id="replay-bar"'));
+  assert(!html.includes('startReplay('));
   vm.runInContext(`setComparison('saved-2',true);setComparison('saved-3',true);setComparison('saved-4',true);setComparison('saved-5',true);`, context);
   assert.equal(vm.runInContext(`setComparison('saved-6',true)`,context), false);
   element('clear-comparisons').click();
   assert.equal(element('comparison-lines').children.length, 0);
-  assert.equal(element('replay-bar').hidden, true);
   const nameButton = element('history-list').children[0].children[0].children[0];
   nameButton.click();
   const editor = nameButton.replacement;
@@ -130,6 +133,8 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
   };
   vm.runInContext(`planeProfiles=[{id:'dart',name:'Dart'},{id:'glider',name:'Glider'}];activeProfileId='dart';historyFlights[0].profile_id='dart';renderProfiles();renderHistory()`, context);
   assert.equal(element('plane-list').children.length,2);
+  assert.equal(element('plane-list').children[0].children[2].className,'trash-button');
+  assert.equal(element('plane-list').children[0].children.length,3,'Plane rows only need drag, details, and delete');
   assert.equal(element('next-plane').value,'dart');
   // Drag the first plane onto the second.
   const firstGrip = element('plane-list').children[0].children[0];
@@ -139,7 +144,7 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
   firstGrip.pointerup({pointerId:1});
   await flush();
   assert.deepEqual(profilePosts[0].order,['glider','dart']);
-  const profileSelect = element('history-list').children[0].children[3].children[1].children[2];
+  const profileSelect = element('history-list').children[0].children[2].children[3].children[1].children[2];
   profileSelect.value = 'glider';
   await profileSelect.change();
   assert.equal(vm.runInContext('historyFlights[0].profile_id',context),'glider');
@@ -148,7 +153,7 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
   assert.equal(element('history-count').textContent,1);
   element('plane-filter').change({target:{value:'all'}});
   assert.equal(element('history-list').children.length,6);
-  const flightGrip = element('history-list').children[0].children[4];
+  const flightGrip = element('history-list').children[0].children[3];
   context.document.elementFromPoint = () => element('flight-drop-options').children[1];
   flightGrip.pointerdown({button:0,pointerId:2,clientX:100,clientY:600,preventDefault(){}});
   const cardsDuringDrag = element('history-list').children;
@@ -161,13 +166,13 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
   assert.equal(vm.runInContext('historyFlights[0].profile_id',context),'dart');
   assert.equal(vm.runInContext('activeProfileId',context),'dart','Moving a flight must not change the selected plane');
   context.document.elementFromPoint = () => element('flight-drop-options').children[0];
-  const nextGrip = element('history-list').children[0].children[4];
+  const nextGrip = element('history-list').children[0].children[3];
   nextGrip.pointerdown({button:0,pointerId:3,clientX:100,clientY:600,preventDefault(){}});
   nextGrip.pointermove({clientX:100,clientY:450});
   await nextGrip.pointerup({pointerId:3});
   assert.equal(profilePosts.at(-1).profile_id,null);
   const postsBeforeCancel = profilePosts.length;
-  const cancelGrip = element('history-list').children[0].children[4];
+  const cancelGrip = element('history-list').children[0].children[3];
   cancelGrip.pointerdown({button:0,pointerId:4,clientX:100,clientY:600,preventDefault(){}});
   cancelGrip.pointercancel();
   await cancelGrip.pointerup({pointerId:4});
@@ -191,7 +196,7 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
   element('add-plane-toggle').click();
   assert.equal(element('plane-form').hidden,true);
   assert(!html.includes('id="plane-status"'),'Only one shared status area');
-  const optionsMenu = element('history-list').children[0].children[3];
+  const optionsMenu = element('history-list').children[0].children[2].children[3];
   optionsMenu.open = true; optionsMenu.toggle();
   const menuRows = element('history-list').children;
   vm.runInContext('renderHistory()', context);
@@ -207,7 +212,7 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
   vm.runInContext(`historyFlights[0].video_status='ready';historyFlights[0].video_duration=1;latestData={session_id:'video-session'};renderHistory()`,context);
   const requestsBeforeVideo = requests;
   const graphBeforeVideo = element('observed-line').attributes.d;
-  element('history-list').children[0].children[2].children[2].click();
+  element('history-list').children[0].children[2].children[1].click();
   assert.equal(element('clip-dialog').open,true);
   assert(element('clip-video').src.includes('/api/video/video-session/saved-1.mp4'));
   assert.equal(element('observed-line').attributes.d,graphBeforeVideo,'Video must not alter live graph');
@@ -222,9 +227,9 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
   console.log('Flight Log checks passed: tabs, contextual add form, compare mode and drag-only category tray.');
   console.log('Flight drag checks passed: categorizing, unassigning, polling protection and cancellation.');
   console.log('Profile checks passed: active plane, drag reorder, flight assignment, history filtering.');
-  console.log('Coach checks passed: automatic, once per flight, mute stops, no replay.');
+  console.log('Coach checks passed: automatic, once per flight, mute stops, no trajectory replay.');
   console.log('Score checks passed: mismatched score rejected, late audio cancelled.');
   console.log('Graph checks passed: invalid samples, path breaks, real launch point, exit labels, reset.');
-  console.log('History checks passed: cards, overlays, coordinate scaling, replay/scrub isolation, selection limit, clear.');
+  console.log('History checks passed: cards, static overlays, coordinate scaling, selection limit, clear.');
   console.log('Name editor checks passed: save, cancel, polling protection; collapse accessibility and reduced-motion support.');
 })().catch(error => {console.error(error); process.exitCode = 1;});

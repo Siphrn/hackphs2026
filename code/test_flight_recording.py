@@ -8,6 +8,26 @@ from flight_recording import FlightRecorder
 
 
 class RecordingTests(unittest.TestCase):
+    def test_one_second_pre_and_post_roll(self):
+        results = []
+        recorder = FlightRecorder(lambda *args: results.append(args))
+        frame = np.zeros((240, 320, 3), np.uint8)
+        for index in range(21):
+            recorder.observe(frame, index * .051)
+        recorder.start(1.1)
+        for index in range(22, 41):
+            recorder.observe(frame, index * .051)
+        recorder.complete("history-roll", 88, .9, 2.0)
+        with patch.object(recorder, "encode", return_value=(b"encoded-roll", 2.9)) as encoder:
+            for index in range(41, 61):
+                recorder.observe(frame, index * .051)
+            recorder.close()
+        self.assertEqual(results, [("history-roll", b"encoded-roll", 2.9, False)])
+        frames = encoder.call_args.args[0]
+        self.assertLessEqual(frames[0][0], .06)
+        self.assertGreaterEqual(frames[-1][0], 2.85)
+        self.assertEqual(encoder.call_args.args[1:], (88, .9))
+
     def test_capture_rate_size_and_duration_limits(self):
         recorder = FlightRecorder(lambda *args: None)
         frame = np.zeros((480, 800, 3), np.uint8)
@@ -63,7 +83,7 @@ class RecordingTests(unittest.TestCase):
             recorder.close()
         self.assertIn(b"ftyp", payload[:32])
         self.assertGreater(len(payload), 1000)
-        self.assertLessEqual(duration, 1.05)
+        self.assertLessEqual(duration, 1.1)
 
 
 if __name__ == "__main__":

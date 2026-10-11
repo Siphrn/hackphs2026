@@ -20,7 +20,7 @@ Build, fly, compare, and improve.
 - **Smoothness scoring:** a 0–100 score based on direction and speed consistency during the visible flight.
 - **Trajectory dashboard:** observed path, visible airtime, pixel-based speed, and a short-term forecast.
 - **Plane profiles:** organize designs, reorder profiles, and drag saved flights into categories.
-- **Flight comparisons:** overlay up to five previous trajectories and replay their recorded paths.
+- **Flight comparisons:** overlay up to five previous trajectories for side-by-side analysis.
 - **Flight videos:** watch short local clips with tracking annotations and the final score.
 - **Arduino scoreboard:** send completed scores over USB to a 1602 LCD.
 - **Optional voice coach:** ElevenLabs generates spoken, score-based feedback.
@@ -100,8 +100,7 @@ Press Space to begin the next throw.
 
 ### Flights
 
-The log keeps the **50 most recent completed flights** lasting at least **0.50 seconds**.
-Shorter detections are excluded as likely mishaps.
+The log keeps the **50 most recent completed flights**, including very short throws.
 
 - Filter by plane with **All planes**.
 - Click a name to rename it. Enter or clicking away saves; Escape cancels.
@@ -109,16 +108,17 @@ Shorter detections are excluded as likely mishaps.
 - Drag a flight's dotted grip to reveal a category tray; drop onto a plane or **Unassigned**.
 - Choose **Compare** to select up to five translucent overlays. **Done** hides controls without removing overlays.
 - **Clear comparisons** removes overlays, not saved flights.
-- **Replay** animates the recorded path with pause, scrubbing, and 0.5× / 1× / 2× speeds.
 - **Video** opens the recorded camera view after encoding finishes.
+- Each video includes up to **1 second before detection** and **1 second after the flight**.
+- Trash buttons permanently delete individual flights (including their video) or plane profiles. Deleting a profile also deletes all flights and videos assigned to it.
 
-Replays and videos never change the current score or trigger spoken commentary.
+Videos never change the current score or trigger spoken commentary.
 
 ### Planes
 
 Use **+ Add plane** to create a profile. Each row shows its saved flight count and
-best score. Drag grips reorder the list; **⋯ → Move up/down** is an alternative.
-Up to **30 profiles** can exist in a session.
+best score. Use the drag grips to reorder the list.
+Up to **30 profiles** can be saved locally.
 
 The shared **Next throw** selector determines the plane recorded when you arm a
 throw. Changing it during flight affects the next throw. Moving a saved flight
@@ -151,18 +151,18 @@ diagnosis of the airplane's design.
 
 ## Local recordings & privacy
 
-Recording begins at the first tracked detection, not while waiting for a throw.
-Clearing or rearming discards an unfinished recording.
+SkyTrace retains a rolling one-second camera buffer while it waits. A completed
+clip contains up to one second before detection, the tracked throw, and one
+second after the final detection. Clearing discards an unfinished recording.
 
-- **Format:** H.264 MP4, no audio, up to 15 seconds per throw, at most 640 pixels wide and 20 fps.
+- **Format:** H.264 MP4, no audio, up to 17 seconds including pre/post-roll, at most 640 pixels wide and 20 fps.
 - **Storage cap:** 100 MiB of completed clips, with a 10 MiB cap per clip. Oldest clips expire first; scores and paths remain.
 - **Capture buffer:** an additional bounded 8 MiB JPEG buffer and one background encoding job. Limited clips are marked as shortened; if encoding is unavailable or busy, tracking continues without a clip.
-- **Session-only:** profiles, history, and completed clips live in tracker memory and clear when Python restarts. Refreshing the browser does not clear them.
+- **Persistent local storage:** profiles, the 50-flight log, and completed clips are restored after Python restarts from the gitignored `.skytrace/` folder.
 - **Temporary encoding:** OpenCV uses a local scratch MP4 during encoding, removed immediately afterward. Footage is not uploaded to cloud services.
 
 Clips also expire when their flight leaves the 50-flight log. Older throws cannot
-gain recordings retroactively. The previous `.skytrace/flights.sqlite3` history
-file is no longer read or written.
+gain recordings retroactively. Deleting a flight also deletes its stored MP4.
 
 Although only one laptop is needed, the development server is reachable on the
 local network. Anyone who can access it can view that session's dashboard and

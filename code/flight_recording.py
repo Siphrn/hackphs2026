@@ -2,6 +2,7 @@
 import math
 import tempfile
 import threading
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -11,7 +12,9 @@ import numpy as np
 
 class FlightRecorder:
     FPS = 20
-    MAX_SECONDS = 15
+    MAX_FLIGHT_SECONDS = 15
+    PRE_ROLL_SECONDS = 1
+    POST_ROLL_SECONDS = 1
     MAX_BUFFER_BYTES = 8 * 1024 * 1024
     MAX_CLIP_BYTES = 10 * 1024 * 1024
 
@@ -19,30 +22,97 @@ class FlightRecorder:
         self.publish = publish
         self._worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="flight-video")
         self._encoding = threading.BoundedSemaphore(1)
+        self._pre_frames = deque()
+        self._pre_bytes = 0
+        self._last_observed = None
         self.reset()
 
     def reset(self):
         self.frames = []
         self.buffer_bytes = 0
         self.truncated = False
+        self._clip_origin = None
+        self._pending = None
 
-    def capture(self, frame, elapsed):
-        if self.truncated:
-            return
-        if not math.isfinite(elapsed) or elapsed < 0:
-            return
-        if elapsed > self.MAX_SECONDS:
-            self.truncated = True
-            return
-        if self.frames and elapsed - self.frames[-1][0] < 1 / self.FPS:
-            return
+    def cancel(self):
+        """Cancel an unfinished flight, or preserve a completed clip immediately."""
+        if self._pending:
+            self._finish_active()
+        else:
+            self.reset()
+
+    def _frame_payload(self, frame):
         height, width = frame.shape[:2]
         size = (min(640, width) // 2 * 2, max(2, round(height * min(640, width) / width) // 2 * 2))
         small = cv2.resize(frame, size)
         ok, encoded = cv2.imencode(".jpg", small, [cv2.IMWRITE_JPEG_QUALITY, 70])
-        if not ok:
+        return encoded.tobytes() if ok else None
+
+    def observe(self, frame, timestamp):
+        """Keep a rolling pre-roll and capture an active flight through post-roll."""
+        if not math.isfinite(timestamp):
             return
-        payload = encoded.tobytes()
+        if self._last_observed is not None and timestamp - self._last_observed < 1 / self.FPS:
+            return
+        payload = self._frame_payload(frame)
+        if payload is None:
+            return
+        self._last_observed = timestamp
+
+        self._pre_frames.append((timestamp, payload))
+        self._pre_bytes += len(payload)
+        cutoff = timestamp - self.PRE_ROLL_SECONDS
+        while self._pre_frames and (self._pre_frames[0][0] < cutoff or self._pre_bytes > self.MAX_BUFFER_BYTES):
+            _, expired = self._pre_frames.popleft()
+            self._pre_bytes -= len(expired)
+
+        if self._clip_origin is not None:
+            self._append(timestamp - self._clip_origin, payload)
+            if self._pending and timestamp >= self._pending[3]:
+                self._finish_active()
+
+    def start(self, timestamp):
+        """Start a flight clip with up to one second already buffered."""
+        if self._clip_origin is not None:
+            self._finish_active() if self._pending else self.reset()
+        available = [(t, data) for t, data in self._pre_frames if t >= timestamp - self.PRE_ROLL_SECONDS]
+        self._clip_origin = available[0][0] if available else timestamp
+        for captured_at, payload in available:
+            self._append(captured_at - self._clip_origin, payload)
+
+    def complete(self, history_id, score, duration, flight_ended_at):
+        """Finish after one second of camera footage beyond the last detection."""
+        if self._clip_origin is None:
+            return
+        deadline = flight_ended_at + self.POST_ROLL_SECONDS
+        self._pending = (history_id, score, duration, deadline)
+        if self._last_observed is not None and self._last_observed >= deadline:
+            self._finish_active()
+
+    def _append(self, elapsed, payload):
+        max_clip_seconds = self.PRE_ROLL_SECONDS + self.MAX_FLIGHT_SECONDS + self.POST_ROLL_SECONDS
+        if self.truncated or elapsed < 0:
+            return
+        if elapsed > max_clip_seconds or self.buffer_bytes + len(payload) > self.MAX_BUFFER_BYTES:
+            self.truncated = True
+            return
+        self.frames.append((elapsed, payload))
+        self.buffer_bytes += len(payload)
+
+    def capture(self, frame, elapsed):
+        """Capture a directly-timed frame (kept for isolated encoder use/tests)."""
+        if self.truncated:
+            return
+        if not math.isfinite(elapsed) or elapsed < 0:
+            return
+        if elapsed > self.MAX_FLIGHT_SECONDS:
+            self.truncated = True
+            return
+        if self.frames and elapsed - self.frames[-1][0] < 1 / self.FPS:
+            return
+        payload = self._frame_payload(frame)
+        if payload is None:
+            return
         if self.buffer_bytes + len(payload) > self.MAX_BUFFER_BYTES:
             self.truncated = True
             return
@@ -52,6 +122,15 @@ class FlightRecorder:
     def finish(self, history_id, score, duration):
         frames, truncated = self.frames, self.truncated
         self.reset()
+        self._submit(history_id, frames, score, duration, truncated)
+
+    def _finish_active(self):
+        history_id, score, duration, _ = self._pending or (None, 0, 0, 0)
+        frames, truncated = self.frames, self.truncated
+        self.reset()
+        self._submit(history_id, frames, score, duration, truncated)
+
+    def _submit(self, history_id, frames, score, duration, truncated):
         if not history_id:
             return
         if not frames or not self._encoding.acquire(blocking=False):
@@ -66,7 +145,7 @@ class FlightRecorder:
     def _encode_and_publish(self, history_id, frames, score, duration, truncated):
         try:
             payload, clip_duration = self.encode(frames, score, duration)
-            self.publish(history_id, payload, clip_duration, truncated or duration > self.MAX_SECONDS)
+            self.publish(history_id, payload, clip_duration, truncated or duration > self.MAX_FLIGHT_SECONDS)
         except Exception:
             # Recording is optional: never stop tracking, serial scores or history.
             self.publish(history_id, None, 0, False)
@@ -75,14 +154,14 @@ class FlightRecorder:
 
     @classmethod
     def encode(cls, frames, score, duration):
-        frames = [(t, data) for t, data in frames if t <= duration]
         if not frames:
-            raise ValueError("No visible flight frames")
+            raise ValueError("No flight video frames")
         first = cv2.imdecode(np.frombuffer(frames[0][1], np.uint8), cv2.IMREAD_COLOR)
         if first is None:
             raise ValueError("Invalid video frame")
         height, width = first.shape[:2]
-        clip_duration = min(duration, cls.MAX_SECONDS, frames[-1][0] + 1 / cls.FPS)
+        max_clip_seconds = cls.PRE_ROLL_SECONDS + cls.MAX_FLIGHT_SECONDS + cls.POST_ROLL_SECONDS
+        clip_duration = min(max_clip_seconds, frames[-1][0] + 1 / cls.FPS)
         count = max(1, math.ceil(clip_duration * cls.FPS))
         # OpenCV needs a seekable filename to finalize the MP4 container. This
         # scratch file is removed immediately; only capped MP4 bytes survive in RAM.
@@ -116,5 +195,9 @@ class FlightRecorder:
             return path.read_bytes(), count / cls.FPS
 
     def close(self):
-        self.reset()
+        if self._clip_origin is not None:
+            self._finish_active()
+        self._pre_frames.clear()
+        self._pre_bytes = 0
+        self._last_observed = None
         self._worker.shutdown(wait=True)

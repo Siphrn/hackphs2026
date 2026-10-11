@@ -3,15 +3,19 @@ import os
 import time
 from collections import deque
 from glob import glob
+from statistics import median
 
 import cv2
 import numpy as np
 import serial
 
 from dashboard_server import dashboard_state, start_dashboard_server
+from flight_prediction import predict_flight
 
 
 FLIGHT_END_TIMEOUT = 0.35
+MIN_SCORING_MOVEMENT = 3.0
+MAX_SMOOTH_TURN_RATE = 360.0
 
 
 def connect_arduino():
@@ -33,77 +37,55 @@ def connect_arduino():
     return None
 
 
-def predict_flight(samples, frame_width, frame_height):
-    """Estimate velocity, angle, and a short future path in camera pixels."""
-    empty_prediction = {
-        "speed": 0,
-        "angle": 0,
-        "points": [],
-        "remaining_airtime": 0,
-        "projected_distance": 0,
-        "landing_x": None,
-        "confidence": 0,
-    }
+def calculate_flight_smoothness(samples):
+    """Score the consistency of the entire visible flight from 0.0 to 1.0."""
+    segments = []
 
-    if len(samples) < 2:
-        return empty_prediction
+    for previous, current in zip(samples, samples[1:]):
+        previous_time, previous_x, previous_y = previous
+        current_time, current_x, current_y = current
+        elapsed = current_time - previous_time
+        delta_x = current_x - previous_x
+        delta_y = current_y - previous_y
+        distance = math.hypot(delta_x, delta_y)
 
-    recent = list(samples)[-10:]
-    first_time, first_x, first_y = recent[0]
-    last_time, last_x, last_y = recent[-1]
-    elapsed = last_time - first_time
+        # Tiny movements are usually camera or contour jitter, not the airplane.
+        if elapsed <= 0 or distance < MIN_SCORING_MOVEMENT:
+            continue
 
-    if elapsed <= 0.01:
-        return empty_prediction
-
-    velocity_x = (last_x - first_x) / elapsed
-    velocity_y = (last_y - first_y) / elapsed
-    speed = math.hypot(velocity_x, velocity_y)
-    angle = math.degrees(math.atan2(-velocity_y, max(abs(velocity_x), 0.01)))
-
-    # A lightweight 2D flight model for the hackathon demo. Because it is
-    # recalculated each frame, the prediction corrects as new measurements arrive.
-    downward_acceleration = 420.0
-    ground_y = frame_height * 0.9
-    predicted_points = []
-    landing_x = None
-    remaining_airtime = 0
-
-    for step in range(1, 51):
-        future_time = step * 0.04
-        predicted_x = last_x + velocity_x * future_time
-        predicted_y = (
-            last_y
-            + velocity_y * future_time
-            + 0.5 * downward_acceleration * future_time**2
+        segments.append(
+            {
+                "time": current_time,
+                "heading": math.atan2(delta_y, delta_x),
+                "speed": distance / elapsed,
+            }
         )
 
-        predicted_points.append(
-            [
-                round(max(0, min(frame_width, predicted_x)), 1),
-                round(max(0, min(frame_height, predicted_y)), 1),
-            ]
-        )
-        remaining_airtime = future_time
+    if len(segments) < 3:
+        return 0.0
 
-        if predicted_y >= ground_y or predicted_x < 0 or predicted_x > frame_width:
-            landing_x = max(0, min(frame_width, predicted_x))
-            break
+    total_heading_change = 0.0
+    for previous, current in zip(segments, segments[1:]):
+        heading_change = current["heading"] - previous["heading"]
+        wrapped_change = (heading_change + math.pi) % (2 * math.pi) - math.pi
+        total_heading_change += abs(math.degrees(wrapped_change))
 
-    if landing_x is None and predicted_points:
-        landing_x = predicted_points[-1][0]
+    visible_duration = max(segments[-1]["time"] - segments[0]["time"], 0.01)
+    turn_rate = total_heading_change / visible_duration
+    heading_score = max(0.0, 1.0 - turn_rate / MAX_SMOOTH_TURN_RATE)
 
-    confidence = min(92, 35 + len(recent) * 6)
+    speeds = [segment["speed"] for segment in segments]
+    typical_speed = median(speeds)
+    speed_deviation = median(abs(speed - typical_speed) for speed in speeds)
+    relative_speed_deviation = (
+        speed_deviation / typical_speed if typical_speed > 0 else 1.0
+    )
+    speed_score = max(0.0, 1.0 - min(relative_speed_deviation / 0.75, 1.0))
 
-    return {
-        "speed": speed,
-        "angle": angle,
-        "points": predicted_points,
-        "remaining_airtime": remaining_airtime,
-        "projected_distance": abs((landing_x or last_x) - last_x),
-        "landing_x": landing_x,
-        "confidence": confidence,
-    }
+    # Direction changes are the strongest sign of wobble. Speed consistency has
+    # a smaller influence because a good airplane naturally slows during flight.
+    smoothness = heading_score * 0.85 + speed_score * 0.15
+    return max(0.0, min(1.0, smoothness))
 
 
 camera = cv2.VideoCapture(0)
@@ -124,6 +106,7 @@ flight_started = False
 flight_complete = False
 
 flight_points = []
+flight_times = []
 flight_start_time = None
 last_seen_time = None
 
@@ -178,7 +161,9 @@ try:
                 center = (smoothed_x, smoothed_y)
                 current_time = time.perf_counter()
 
-                if flight_armed:
+                if flight_armed and (
+                    not flight_started or current_time - last_seen_time <= FLIGHT_END_TIMEOUT
+                ):
                     trajectory.appendleft(center)
 
                     if not flight_started:
@@ -188,6 +173,7 @@ try:
                         print("Flight started!")
 
                     flight_points.append(center)
+                    flight_times.append(current_time - flight_start_time)
                     flight_samples.append((current_time, center[0], center[1]))
                     last_seen_time = current_time
 
@@ -240,28 +226,10 @@ try:
                 ending_x = flight_points[-1][0]
                 last_horizontal_distance = abs(ending_x - starting_x)
 
-                start_point = flight_points[0]
-                end_point = flight_points[-1]
-                straight_line_distance = math.hypot(
-                    end_point[0] - start_point[0],
-                    end_point[1] - start_point[1],
+                last_smoothness = calculate_flight_smoothness(
+                    list(flight_samples)
                 )
-                last_smoothness = (
-                    straight_line_distance / last_distance
-                    if last_distance > 0
-                    else 0
-                )
-                last_smoothness = max(0, min(1, last_smoothness))
-
-                airtime_points = min(last_airtime / 2.0, 1.0) * 40
-                distance_points = min(
-                    last_horizontal_distance / (frame_width * 0.75),
-                    1.0,
-                ) * 40
-                smoothness_points = last_smoothness * 20
-                last_score = round(
-                    airtime_points + distance_points + smoothness_points
-                )
+                last_score = round(last_smoothness * 100)
 
                 print(f"Smoothness: {last_smoothness * 100:.0f}%")
                 print(f"Flight score: {last_score}/100")
@@ -314,8 +282,12 @@ try:
             prediction_confidence=prediction["confidence"],
             frame_width=frame_width,
             frame_height=frame_height,
-            trajectory=[list(point) for point in reversed(trajectory)],
+            # Keep the actual launch point, even after the camera's short trail rolls over.
+            trajectory=[list(point) for point in flight_points],
+            trajectory_times=list(flight_times),
             prediction=prediction["points"],
+            forecast_endpoint=prediction["forecast_endpoint"],
+            forecast_kind=prediction["forecast_kind"],
         )
 
         display_status = (
@@ -363,6 +335,7 @@ try:
             trajectory.clear()
             recent_centers.clear()
             flight_points.clear()
+            flight_times.clear()
             flight_samples.clear()
             flight_armed = False
             flight_started = False
@@ -375,6 +348,7 @@ try:
             flight_started = False
             flight_complete = False
             flight_points.clear()
+            flight_times.clear()
             flight_samples.clear()
             trajectory.clear()
             recent_centers.clear()

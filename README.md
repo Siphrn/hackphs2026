@@ -1,10 +1,44 @@
 # SkyTrace Paper Airplane Scorer
 
 Throw a yellow paper airplane through the laptop camera view. OpenCV tracks the
-flight, estimates its future path, scores the throw, sends the score to an
+flight, estimates its future path, scores how smoothly it moves throughout the
+visible portion of the throw, sends the score to an
 Arduino LCD, and updates a live browser dashboard.
 
 ## Run it
+
+### ElevenLabs voice commentary
+
+Start the tracker normally; voice credentials load automatically from Mac Keychain
+(or `ELEVENLABS_API_KEY` if set):
+
+```sh
+python code/main.py
+```
+
+There is no startup key prompt or separate verification request. For one-time setup
+on another Mac, or to replace a rotated key, run `python code/configure_voice.py`.
+The key is stored securely in Keychain, never source files or the browser. Rotate
+keys shared in chat. Enable Text to Speech access; the default voice is George
+(`JBFqnCBsd6RMkjVDRZzb`), overridable with `ELEVENLABS_VOICE_ID`.
+
+In the website's top bar, switch **Flight coach** on once to allow browser audio.
+It automatically speaks once after each completed flight while enabled. Switching
+it off stops speech and prevents further requests from that browser; speech already
+being generated may still consume credits. There are no voice play or replay controls,
+and switching back on does not repeat an already-announced flight. The switch
+starts off on page load so browsers can unlock sound from your click.
+Feedback tiers are 0–24, 25–49, 50–74, 75–89, and 90–100.
+Speech includes the exact score. Only the score and a short scripted message go
+to ElevenLabs, not camera video. Suggestions are general coaching, not measured
+wing diagnostics. Internet and ElevenLabs credits are required for audio; tracking
+and scoring still work offline. Audio generation runs in the background and is
+deduplicated per flight, including across browser tabs. The last 12 flights are
+cached in memory to deduplicate requests. ElevenLabs still authenticates actual
+speech requests; an invalid or expired key cannot be bypassed. The old
+`code/start_with_voice.py` launcher also works without a prompt.
+
+### Tracker
 
 1. Connect the Arduino and close the Arduino IDE Serial Monitor.
 2. Activate the Python virtual environment.
@@ -33,6 +67,26 @@ internet access.
 
 ## Dashboard measurements
 
+### Flight history and trajectory replay
+
+The left panel saves the last 50 completed flights, newest first. Collapse or expand
+it with the arrow. Check **Compare** to add up to five color-coded, translucent paths
+over the current graph. **Clear overlays** removes comparisons without deleting history.
+
+Press a flight's **Replay** to animate its recorded path on the same graph. Pause,
+resume, scrub the timeline, or choose 0.5× / 1× / 2× playback. Replay never replaces
+live tracking, changes the current score, or requests spoken commentary. Closing
+replay leaves that flight's full comparison path visible.
+
+History lives locally in `.skytrace/flights.sqlite3` (ignored by Git), survives
+tracker restarts, and is shared with both laptops through `/api/history`. It stores
+positions, sample times, and metrics—not camera video, audio, or API keys. Flights
+recorded before this feature was installed cannot be recovered automatically.
+Different frame resolutions are normalized for overlays; comparisons only make
+sense with the same camera position and view, and are not physical-distance measurements.
+
+### Graph
+
 - Solid yellow line: measured trajectory
 - Dashed blue line: predicted future path
 - Speed: camera pixels per second
@@ -41,3 +95,10 @@ internet access.
 
 The current prediction is intentionally camera-relative. Converting pixels to
 meters requires camera calibration against an object of known size.
+
+Completed results are frozen. Voice requests carry the run ID, flight ID, and
+exact score; mismatches are rejected. Audio URLs are unique per tracker run and
+are never browser-cached, preventing old scores from being spoken after a restart.
+The graph retains the original launch point, breaks lines at invalid samples or
+large jumps, and distinguishes the last observed position, an estimated frame
+exit, and an estimated landing at the model's ground reference (90% of frame height).

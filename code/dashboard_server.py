@@ -1,17 +1,27 @@
 import json
+import copy
+import sqlite3
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import urlsplit
+
+from flight_voice import FlightVoice, score_commentary
+from flight_history import FlightHistory
 
 
 WEB_DIRECTORY = Path(__file__).parent.parent / "web"
 
 
 class DashboardState:
-    def __init__(self):
+    def __init__(self, history_store=None):
         self._lock = threading.Lock()
+        self._history_store = history_store
         self._data = {
             "status": "READY",
+            "flight_id": 0,
+            "history_id": None,
+            "history_error": False,
             "detected": False,
             "score": 0,
             "airtime": 0,
@@ -27,29 +37,121 @@ class DashboardState:
             "frame_width": 640,
             "frame_height": 480,
             "trajectory": [],
+            "trajectory_times": [],
             "prediction": [],
+            "forecast_endpoint": None,
+            "forecast_kind": None,
         }
 
     def update(self, **values):
         with self._lock:
-            self._data.update(values)
+            if values.get("status") == "COMPLETE" and self._data["status"] != "COMPLETE":
+                self._data["flight_id"] += 1
+            # A completed result is immutable until the tracker leaves COMPLETE.
+            if self._data["status"] == "COMPLETE" and values.get("status") == "COMPLETE":
+                return
+            self._data.update(copy.deepcopy(values))
+            if values.get("status") == "COMPLETE" and self._history_store is not None:
+                try:
+                    self._data["history_id"] = self._history_store.save(self._data)
+                    self._data["history_error"] = False
+                except (OSError, sqlite3.Error):
+                    self._data["history_error"] = True
+                    print("Could not save flight history. Tracking continues.")
 
     def snapshot(self):
         with self._lock:
-            return dict(self._data)
+            return copy.deepcopy(self._data)
+
+    def history(self):
+        return self._history_store.list() if self._history_store else []
 
 
-dashboard_state = DashboardState()
+dashboard_state = DashboardState(FlightHistory(WEB_DIRECTORY.parent / ".skytrace" / "flights.sqlite3"))
+flight_voice = FlightVoice()
 
 
 class DashboardRequestHandler(BaseHTTPRequestHandler):
+    def do_POST(self):
+        if self.path != "/api/voice":
+            self.send_error(404)
+            return
+        # Do not let unrelated websites trigger paid speech requests on localhost.
+        origin = self.headers.get("Origin")
+        if origin and urlsplit(origin).netloc != self.headers.get("Host"):
+            self.send_error(403)
+            return
+        state = dashboard_state.snapshot()
+        if state["status"] != "COMPLETE":
+            self.send_error(409, "Finish a flight first")
+            return
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            if not 0 < length <= 1024:
+                raise ValueError("Invalid body size")
+            requested = json.loads(self.rfile.read(length))
+            if not isinstance(requested, dict):
+                raise ValueError("Invalid body")
+        except (ValueError, json.JSONDecodeError):
+            self.send_error(400, "Expected flight identity")
+            return
+        if (requested.get("flight_id") != state["flight_id"]
+                or requested.get("session_id") != flight_voice.session_id
+                or requested.get("score") != state["score"]):
+            self.send_error(409, "Flight result changed")
+            return
+        flight_voice.request(state["flight_id"], state["score"])
+        self.send_response(202)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
     def do_GET(self):
-        if self.path == "/api/state":
-            payload = json.dumps(dashboard_state.snapshot()).encode("utf-8")
+        if self.path == "/api/history":
+            try:
+                payload = json.dumps({"flights": dashboard_state.history()}).encode("utf-8")
+            except (OSError, sqlite3.Error):
+                self.send_error(503, "History unavailable")
+                return
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Cache-Control", "no-store")
             self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+            return
+
+        if self.path == "/api/state":
+            state = dashboard_state.snapshot()
+            state["session_id"] = flight_voice.session_id
+            state["voice"] = flight_voice.public_snapshot(state["flight_id"])
+            if state["status"] == "COMPLETE":
+                state["voice"].setdefault("text", score_commentary(state["score"]))
+            payload = json.dumps(state).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+            return
+
+        if self.path.startswith("/api/voice/") and self.path.endswith(".mp3"):
+            try:
+                session_id, filename = self.path.removeprefix("/api/voice/").split("/")
+                if session_id != flight_voice.session_id:
+                    raise ValueError("Old audio session")
+                flight_id = int(filename.removesuffix(".mp3"))
+            except ValueError:
+                self.send_error(404)
+                return
+            payload = flight_voice.audio(flight_id)
+            if payload is None:
+                self.send_error(404)
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "audio/mpeg")
+            self.send_header("Content-Length", str(len(payload)))
+            self.send_header("Cache-Control", "no-store")
             self.end_headers()
             self.wfile.write(payload)
             return

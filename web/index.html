@@ -80,13 +80,51 @@
     }
 
     .connection.offline { color: var(--red); }
+    .topbar-tools { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+    .coach-control { display: grid; gap: 4px; font-size: 13px; }
+    .coach-control label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+    .coach-control input { accent-color: var(--green); width: 17px; height: 17px; }
+    #voice-status { font-size: 11px; max-width: 240px; }
     .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 15%, transparent); }
 
     main {
-      width: min(1440px, 100%);
+      width: min(1700px, 100%);
       margin: 0 auto;
       padding: clamp(14px, 2.5vw, 28px);
     }
+
+    .dashboard-shell { display: grid; grid-template-columns: 244px minmax(0, 1fr); gap: 16px; align-items: start; }
+    .dashboard-shell.history-collapsed { grid-template-columns: 48px minmax(0, 1fr); }
+    .dashboard-content { min-width: 0; }
+    .history-panel { position: sticky; top: 100px; padding: 12px; min-width: 0; }
+    .history-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .history-heading h2 { margin: 0; font-size: 15px; }
+    button { color: var(--text); border: 1px solid var(--line); background: var(--panel-soft); border-radius: 7px; padding: 7px 10px; cursor: pointer; }
+    button:hover { border-color: var(--green); }
+    button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; }
+    button:disabled { opacity: .45; cursor: default; }
+    .history-collapsed .history-body, .history-collapsed .history-heading h2 { display: none; }
+    .history-collapsed .history-panel { padding: 6px; }
+    .history-collapsed #history-toggle { padding: 7px; }
+    .history-note { line-height: 1.5; margin: 10px 0; }
+    .history-list { display: grid; gap: 9px; max-height: min(64vh, 640px); overflow-y: auto; scrollbar-width: thin; padding-right: 3px; }
+    .history-item { padding: 11px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.015); }
+    .history-item.selected { border-color: var(--overlay-color); }
+    .history-item-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; }
+    .history-item-head strong { color: var(--green); font-variant-numeric: tabular-nums; }
+    .history-meta { margin: 7px 0 10px; color: var(--muted); font-size: 11px; line-height: 1.6; }
+    .history-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; }
+    .history-actions label { display: flex; gap: 5px; align-items: center; cursor: pointer; }
+    .history-actions input { accent-color: var(--overlay-color); }
+    .history-actions button { font-size: 11px; }
+    #comparison-note { margin: 10px 0 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+    .comparison-path { fill: none; stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; opacity: .3; }
+    #replay-marker { stroke: var(--panel); stroke-width: 2; }
+    .replay-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 12px; padding: 10px; border: 1px solid var(--line); border-radius: 9px; font-size: 12px; }
+    .replay-bar[hidden] { display: none; }
+    #replay-title { color: var(--green); }
+    #replay-scrub { flex: 1; min-width: 100px; accent-color: var(--green); }
+    #replay-speed { border: 1px solid var(--line); border-radius: 5px; color: var(--text); background: var(--panel-soft); padding: 5px; }
 
     .hero {
       display: flex;
@@ -164,16 +202,16 @@
       position: relative;
       overflow: hidden;
       aspect-ratio: 4 / 3;
-      min-height: 330px;
+      min-height: 0;
       border-radius: 10px;
-      background:
-        linear-gradient(rgba(41,59,51,.62) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(41,59,51,.62) 1px, transparent 1px),
-        var(--panel-soft);
-      background-size: 12.5% 25%;
+      background: var(--panel-soft);
     }
 
-    #trajectory-svg { width: 100%; height: 100%; display: block; }
+    #trajectory-svg { width: 100%; height: 100%; display: block; position: absolute; inset: 0; }
+    #camera-frame { fill: url(#plot-grid); stroke: #3b5146; stroke-width: 1; }
+    #launch-marker { fill: var(--green); stroke: var(--panel); stroke-width: 2; }
+    #endpoint-label { fill: var(--yellow); }
+    .axis-label { paint-order: stroke; stroke: var(--panel-soft); stroke-width: 5px; stroke-linejoin: round; }
     #observed-line { fill: none; stroke: var(--yellow); stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
     #predicted-line { fill: none; stroke: var(--blue); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 10 9; }
     #current-marker { fill: var(--yellow); stroke: var(--panel); stroke-width: 5; }
@@ -232,10 +270,14 @@
     .supporting { font-size: 12px; }
 
     @media (max-width: 800px) {
+      .dashboard-shell, .dashboard-shell.history-collapsed { grid-template-columns: 1fr; }
+      .history-panel { position: static; }
+      .history-collapsed .history-heading h2 { display: block; }
+      .history-list { max-height: 260px; }
       .hero { align-items: flex-start; flex-direction: column; }
       .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .workspace { grid-template-columns: 1fr; }
-      .plot-wrap { min-height: 270px; }
+      .plot-wrap { min-height: 0; }
     }
 
     @media (max-width: 480px) {
@@ -247,7 +289,7 @@
       .metric { padding: 12px; }
       .card-head { align-items: flex-start; flex-direction: column; }
       .legend { justify-content: flex-start; }
-      .plot-wrap { min-height: 220px; }
+      .plot-wrap { min-height: 0; }
       .status-banner { align-items: flex-start; flex-direction: column; }
     }
   </style>
@@ -261,7 +303,13 @@
         <div class="brand-subtitle">Paper airplane flight lab</div>
       </div>
     </div>
-    <div id="connection" class="connection offline"><span class="dot"></span><span>Connecting…</span></div>
+    <div class="topbar-tools">
+      <div class="coach-control">
+        <label><input id="voice-enabled" type="checkbox" role="switch"> Flight coach</label>
+        <span id="voice-status" class="supporting" aria-live="polite">Off</span>
+      </div>
+      <div id="connection" class="connection offline"><span class="dot"></span><span>Connecting…</span></div>
+    </div>
   </header>
 
   <main>
@@ -273,6 +321,21 @@
       <div class="instruction"><kbd>Space</kbd><span>Arm the next throw in the OpenCV window</span></div>
     </section>
 
+    <div id="dashboard-shell" class="dashboard-shell">
+      <aside class="card history-panel" aria-label="Flight history">
+        <div class="history-heading">
+          <h2>Flight history <span id="history-count" class="supporting">0</span></h2>
+          <button id="history-toggle" type="button" aria-expanded="true" aria-controls="history-body" aria-label="Collapse flight history">‹</button>
+        </div>
+        <div id="history-body" class="history-body">
+          <p class="supporting history-note">Select past flights to compare.<br>Replay animates the recorded path.</p>
+          <div id="history-list" class="history-list"><p class="supporting">No flights yet. Complete a throw to save it here.</p></div>
+          <p id="history-status" class="supporting" role="status"></p>
+          <button id="clear-comparisons" type="button" style="margin-top:10px" disabled>Clear overlays</button>
+          <p class="supporting history-note">Last 50 flights · saved on this Mac</p>
+        </div>
+      </aside>
+      <div class="dashboard-content">
     <section class="metrics" aria-label="Flight measurements">
       <article class="card metric"><div class="label">Flight score</div><div class="value"><span id="score">0</span><span class="unit">/100</span></div></article>
       <article class="card metric"><div class="label">Airtime</div><div class="value"><span id="airtime">0.00</span><span class="unit">s</span></div></article>
@@ -288,24 +351,45 @@
         </div>
         <div id="plot-wrap" class="plot-wrap">
           <svg id="trajectory-svg" viewBox="0 0 640 480" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Live paper airplane trajectory">
+            <defs>
+              <pattern id="plot-grid" width="80" height="60" patternUnits="userSpaceOnUse"><path d="M 80 0 H 0 V 60" fill="none" stroke="#293b33" stroke-width="1"/></pattern>
+              <clipPath id="camera-clip"><rect id="clip-frame" width="640" height="480"/></clipPath>
+            </defs>
+            <rect id="camera-frame" width="640" height="480"/>
             <line id="ground-line" x1="0" y1="432" x2="640" y2="432"></line>
-            <polyline id="observed-line" points=""></polyline>
-            <polyline id="predicted-line" points=""></polyline>
-            <ellipse id="landing-zone" cx="0" cy="432" rx="0" ry="11"></ellipse>
+            <g clip-path="url(#camera-clip)">
+              <g id="comparison-lines"></g>
+              <path id="observed-line" d="" vector-effect="non-scaling-stroke"></path>
+              <path id="predicted-line" d="" vector-effect="non-scaling-stroke"></path>
+              <circle id="replay-marker" cx="0" cy="0" r="0"></circle>
+            </g>
+            <circle id="launch-marker" cx="0" cy="0" r="0"></circle>
+            <circle id="landing-zone" cx="0" cy="0" r="0"></circle>
             <circle id="current-marker" cx="0" cy="0" r="0"></circle>
             <text id="launch-label" class="axis-label" text-anchor="middle">Launch</text>
-            <text id="landing-label" class="axis-label" text-anchor="middle">Landing</text>
+            <text id="endpoint-label" class="axis-label" text-anchor="middle">Last seen</text>
+            <text id="landing-label" class="axis-label" text-anchor="middle">Estimated landing</text>
           </svg>
           <div id="empty-state" class="empty-state"><strong>Waiting for a flight</strong><span>Arm the tracker, then throw the yellow airplane.</span></div>
+        </div>
+        <p class="supporting" style="margin:12px 2px 0">Camera-relative path · dashed line is a forecast · last seen is not a measured landing</p>
+        <p id="comparison-note"></p>
+        <div id="replay-bar" class="replay-bar" hidden>
+          <span id="replay-title">Replay</span>
+          <button id="replay-pause" type="button">Pause</button>
+          <input id="replay-scrub" type="range" min="0" max="1000" value="0" aria-label="Replay position">
+          <span id="replay-clock">0.00 / 0.00 s</span>
+          <select id="replay-speed" aria-label="Replay speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select>
+          <button id="replay-close" type="button" aria-label="Close replay">Close</button>
         </div>
       </article>
 
       <aside class="card prediction">
         <div class="eyebrow">PREDICTED OUTCOME</div>
         <h2>Live forecast</h2>
-        <div class="pred-row"><span>Remaining airtime</span><strong id="remaining">0.00 s</strong></div>
+        <div class="pred-row"><span id="remaining-label">Forecast time</span><strong id="remaining">0.00 s</strong></div>
         <div class="pred-row"><span>Projected distance</span><strong id="projected-distance">0 px</strong></div>
-        <div class="pred-row"><span>Landing position</span><strong id="landing-position">—</strong></div>
+        <div class="pred-row"><span id="landing-position-label">Estimated landing</span><strong id="landing-position">—</strong></div>
         <div class="pred-row"><span>Flight smoothness</span><strong id="smoothness">0%</strong></div>
         <div class="confidence">
           <div class="confidence-head"><span>Prediction confidence</span><span id="confidence-label">0%</span></div>
@@ -318,6 +402,8 @@
       <div class="status-main"><span id="status-pill" class="status-pill">READY</span><span id="status-copy">Press Space in the tracker to arm a flight.</span></div>
       <div id="last-update" class="supporting">No data yet</div>
     </section>
+      </div>
+    </div>
   </main>
 
   <script>
@@ -325,16 +411,364 @@
     const connection = byId("connection");
     const svg = byId("trajectory-svg");
     let failures = 0;
+    let latestFlight = null;
+    let requestedFlight = null;
+    let playedFlight = null;
+    let voiceBusy = false;
+    let latestData = null;
+    let audioContext = null;
+    let activeSource = null;
+    let coachMessage = "";
+    let playbackGeneration = 0;
+    const flightKey = (data) => `${data.session_id}:${data.flight_id}`;
+    let historyFlights = [];
+    const selectedHistory = new Set();
+    const overlayColors = ["#b79bff", "#ff9fcf", "#75dfcf", "#ffa66b", "#88b8ff"];
+    const overlayAssignments = new Map();
+    let replay = null;
+    let replayFrame = null;
+    let lastReplayTick = null;
+    let historySignature = "";
+    let historyLoading = false;
+    let historyPollKey = null;
+
+    function historyColor(id) {
+      return overlayAssignments.get(id) || "#96aaa0";
+    }
+
+    function renderHistory() {
+      const list = byId("history-list");
+      const scroll = list.scrollTop;
+      const cards = historyFlights.map(flight => {
+        const card = document.createElement("article");
+        card.className = `history-item${selectedHistory.has(flight.history_id) ? " selected" : ""}`;
+        card.style.setProperty("--overlay-color", historyColor(flight.history_id));
+        const head = document.createElement("div");
+        head.className = "history-item-head";
+        const name = document.createElement("span");
+        name.textContent = `Flight ${flight.flight_id}`;
+        const score = document.createElement("strong");
+        score.textContent = `${Math.round(number(flight.score))}/100`;
+        head.append(name, score);
+        const meta = document.createElement("div");
+        meta.className = "history-meta";
+        const date = new Date(flight.completed_at);
+        meta.textContent = `${Number.isNaN(date.getTime()) ? "Saved flight" : date.toLocaleString([], {month:"short", day:"numeric", hour:"numeric", minute:"2-digit", second:"2-digit"})} · ${number(flight.airtime).toFixed(2)} s`;
+        const actions = document.createElement("div");
+        actions.className = "history-actions";
+        const label = document.createElement("label");
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = selectedHistory.has(flight.history_id);
+        checkbox.setAttribute("aria-label", `Compare flight ${flight.flight_id} from ${meta.textContent}`);
+        checkbox.addEventListener("change", () => {
+          if (setComparison(flight.history_id, checkbox.checked)) {
+            card.classList.toggle("selected", checkbox.checked);
+            card.style.setProperty("--overlay-color", historyColor(flight.history_id));
+          } else checkbox.checked = false;
+        });
+        const labelText = document.createElement("span");
+        labelText.textContent = "Compare";
+        label.append(checkbox, labelText);
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = "Replay";
+        button.setAttribute("aria-label", `Replay flight ${flight.flight_id} from ${meta.textContent}`);
+        button.disabled = !Array.isArray(flight.trajectory) || !flight.trajectory.some(validPoint);
+        button.addEventListener("click", () => startReplay(flight.history_id));
+        actions.append(label, button);
+        card.append(head, meta, actions);
+        return card;
+      });
+      if (!cards.length) {
+        const empty = document.createElement("p");
+        empty.className = "supporting";
+        empty.textContent = "No flights yet. Complete a throw to save it here.";
+        cards.push(empty);
+      }
+      list.replaceChildren(...cards);
+      list.scrollTop = scroll;
+      byId("history-count").textContent = historyFlights.length;
+      byId("clear-comparisons").disabled = selectedHistory.size === 0;
+    }
+
+    async function refreshHistory() {
+      if (historyLoading) return;
+      historyLoading = true;
+      try {
+        const response = await fetch("/api/history", {cache:"no-store"});
+        if (!response.ok) throw new Error("History unavailable");
+        const result = await response.json();
+        const flights = Array.isArray(result.flights) ? result.flights : [];
+        const signature = flights.map(flight => flight.history_id).join(",");
+        if (signature !== historySignature) {
+          historyFlights = flights;
+          historySignature = signature;
+          for (const id of selectedHistory) if (!flights.some(flight => flight.history_id === id)) selectedHistory.delete(id);
+          if (replay && !flights.some(flight => flight.history_id === replay.id)) closeReplay();
+          renderHistory();
+          renderComparisons();
+        }
+        byId("history-status").textContent = latestData?.history_error ? "Latest flight couldn't be saved." : "";
+      } catch (error) {
+        byId("history-status").textContent = "History unavailable. Retrying…";
+      } finally { historyLoading = false; }
+    }
+
+    function setComparison(id, enabled) {
+      if (enabled && !selectedHistory.has(id) && selectedHistory.size >= 5) {
+        byId("history-status").textContent = "Compare up to 5 flights. Uncheck one first.";
+        return false;
+      }
+      if (enabled) {
+        if (!selectedHistory.has(id)) {
+          const used = [...selectedHistory].map(historyColor);
+          overlayAssignments.set(id, overlayColors.find(color => !used.includes(color)) || overlayColors[0]);
+        }
+        selectedHistory.add(id);
+      }
+      else {
+        selectedHistory.delete(id);
+        overlayAssignments.delete(id);
+        if (replay?.id === id) closeReplay();
+      }
+      byId("history-status").textContent = "";
+      byId("clear-comparisons").disabled = selectedHistory.size === 0;
+      renderComparisons();
+      return true;
+    }
+
+    function replayDuration(flight) {
+      const times = Array.isArray(flight.trajectory_times) ? flight.trajectory_times : [];
+      return Math.max(.1, number(flight.airtime), number(times.at(-1)));
+    }
+
+    function replayPoints(flight, time) {
+      const points = Array.isArray(flight.trajectory) ? flight.trajectory : [];
+      const times = flight.trajectory_times;
+      const duration = replayDuration(flight);
+      return points.filter((_, index) => {
+        const t = Array.isArray(times) && times.length === points.length
+          ? number(times[index]) : index / Math.max(1, points.length - 1) * duration;
+        return t <= time;
+      });
+    }
+
+    function renderComparisons() {
+      const width = Math.max(160, number(latestData?.frame_width, 640));
+      const height = Math.max(120, number(latestData?.frame_height, 480));
+      const paths = [];
+      const names = [];
+      let replayPoint = null;
+      for (const flight of historyFlights) {
+        if (!selectedHistory.has(flight.history_id)) continue;
+        const playing = replay?.id === flight.history_id;
+        const points = playing ? replayPoints(flight, replay.time) : flight.trajectory || [];
+        const normalized = points.map(point => validPoint(point)
+          ? [point[0] / Math.max(1, number(flight.frame_width, 640)) * width,
+             point[1] / Math.max(1, number(flight.frame_height, 480)) * height] : null);
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("class", "comparison-path");
+        path.setAttribute("d", pathString(normalized, width, height));
+        path.setAttribute("stroke", historyColor(flight.history_id));
+        path.setAttribute("vector-effect", "non-scaling-stroke");
+        if (playing) {
+          path.style.opacity = ".65";
+          replayPoint = normalized.filter(validPoint).at(-1);
+        }
+        paths.push(path);
+        names.push(`Flight ${flight.flight_id} (${Math.round(number(flight.score))})`);
+      }
+      byId("comparison-lines").replaceChildren(...paths);
+      byId("comparison-note").textContent = names.length ? `Overlays: ${names.join(" · ")} · aligned to camera frame, not physical distance` : "";
+      const marker = byId("replay-marker");
+      marker.setAttribute("cx", replayPoint?.[0] ?? 0);
+      marker.setAttribute("cy", replayPoint?.[1] ?? 0);
+      marker.setAttribute("r", replayPoint ? width * .012 : 0);
+      marker.setAttribute("fill", replay ? historyColor(replay.id) : "transparent");
+      byId("replay-bar").hidden = !replay;
+      if (replay) {
+        const flight = historyFlights.find(flight => flight.history_id === replay.id);
+        const duration = replayDuration(flight);
+        byId("replay-title").textContent = `Flight ${flight.flight_id} replay`;
+        byId("replay-clock").textContent = `${replay.time.toFixed(2)} / ${duration.toFixed(2)} s`;
+        byId("replay-scrub").value = Math.round(replay.time / duration * 1000);
+        byId("replay-pause").textContent = replay.playing ? "Pause" : replay.time >= duration ? "Restart" : "Resume";
+      }
+    }
+
+    function animateReplay(timestamp) {
+      replayFrame = null;
+      if (!replay?.playing) return;
+      const flight = historyFlights.find(flight => flight.history_id === replay.id);
+      if (!flight) { closeReplay(); return; }
+      const elapsed = lastReplayTick === null ? 0 : Math.min(.1, (timestamp - lastReplayTick) / 1000);
+      lastReplayTick = timestamp;
+      replay.time = Math.min(replayDuration(flight), replay.time + elapsed * number(byId("replay-speed").value, 1));
+      if (replay.time >= replayDuration(flight)) replay.playing = false;
+      renderComparisons();
+      if (replay.playing) replayFrame = requestAnimationFrame(animateReplay);
+    }
+
+    function startReplay(id) {
+      if (!setComparison(id, true)) return;
+      if (replayFrame !== null) cancelAnimationFrame(replayFrame);
+      replay = {id, time:0, playing:true};
+      lastReplayTick = null;
+      renderHistory();
+      renderComparisons();
+      replayFrame = requestAnimationFrame(animateReplay);
+    }
+
+    function closeReplay() {
+      if (replayFrame !== null) cancelAnimationFrame(replayFrame);
+      replayFrame = null;
+      replay = null;
+      lastReplayTick = null;
+      renderComparisons();
+    }
+
+    byId("history-toggle").addEventListener("click", () => {
+      const button = byId("history-toggle");
+      const expanded = button.getAttribute("aria-expanded") === "true";
+      button.setAttribute("aria-expanded", String(!expanded));
+      button.setAttribute("aria-label", expanded ? "Expand flight history" : "Collapse flight history");
+      button.textContent = expanded ? "›" : "‹";
+      byId("dashboard-shell").classList.toggle("history-collapsed", expanded);
+    });
+    byId("clear-comparisons").addEventListener("click", () => {
+      selectedHistory.clear(); overlayAssignments.clear(); closeReplay(); renderHistory();
+    });
+    byId("replay-close").addEventListener("click", closeReplay);
+    byId("replay-pause").addEventListener("click", () => {
+      if (!replay) return;
+      const flight = historyFlights.find(flight => flight.history_id === replay.id);
+      if (replay.time >= replayDuration(flight)) replay.time = 0;
+      replay.playing = !replay.playing;
+      if (replayFrame !== null) cancelAnimationFrame(replayFrame);
+      replayFrame = null; lastReplayTick = null;
+      renderComparisons();
+      if (replay.playing) replayFrame = requestAnimationFrame(animateReplay);
+    });
+    byId("replay-scrub").addEventListener("input", () => {
+      if (!replay) return;
+      const flight = historyFlights.find(flight => flight.history_id === replay.id);
+      replay.time = number(byId("replay-scrub").value) / 1000 * replayDuration(flight);
+      lastReplayTick = null;
+      renderComparisons();
+    });
+
+    function stopCoach() {
+      playbackGeneration += 1;
+      if (activeSource) {
+        activeSource.onended = null;
+        activeSource.stop();
+        activeSource = null;
+      }
+    }
+
+    async function requestVoice() {
+      if (!latestData || latestData.status !== "COMPLETE" || voiceBusy) return;
+      voiceBusy = true;
+      const result = latestData;
+      requestedFlight = flightKey(result);
+      try {
+        const response = await fetch("/api/voice", { method: "POST", headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({session_id: result.session_id, flight_id: result.flight_id, score: result.score}) });
+        if (!response.ok) throw new Error("Could not request commentary");
+      } catch (error) {
+        if (latestData && flightKey(latestData) === flightKey(result)) coachMessage = "Speech unavailable for this flight";
+      } finally {
+        voiceBusy = false;
+      }
+    }
+
+    async function playVoice(url, flightId, score) {
+      if (!url) return;
+      playedFlight = flightId;
+      const generation = playbackGeneration;
+      try {
+        if (!audioContext || audioContext.state !== "running") {
+          coachMessage = "Switch coach off/on to allow sound";
+          return;
+        }
+        const response = await fetch(url, {cache: "no-store"});
+        if (!response.ok) throw new Error("Audio unavailable");
+        const buffer = await audioContext.decodeAudioData(await response.arrayBuffer());
+        if (generation !== playbackGeneration || !byId("voice-enabled").checked || flightKey(latestData) !== flightId || latestData.score !== score || latestData.status !== "COMPLETE") return;
+        activeSource = audioContext.createBufferSource();
+        activeSource.buffer = buffer;
+        activeSource.connect(audioContext.destination);
+        activeSource.onended = () => { activeSource = null; coachMessage = "On · waiting for next flight"; };
+        activeSource.start();
+        coachMessage = "Speaking · ElevenLabs";
+      } catch (error) {
+        coachMessage = "Audio unavailable for this flight";
+      }
+    }
+
+    byId("voice-enabled").addEventListener("change", async () => {
+      if (!byId("voice-enabled").checked) {
+        stopCoach();
+        coachMessage = "";
+      } else {
+        // Unlock sound during the user's switch click, before asynchronous TTS.
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextClass) {
+          audioContext ||= new AudioContextClass();
+          try { await audioContext.resume(); }
+          catch (error) { coachMessage = "Browser blocked sound"; }
+        } else {
+          coachMessage = "Audio unsupported in this browser";
+        }
+      }
+      if (latestData) renderVoice(latestData);
+    });
+
+    function renderVoice(data) {
+      latestData = data;
+      const voice = data.voice || {};
+      const complete = data.status === "COMPLETE";
+      const identity = flightKey(data);
+      if (latestFlight !== identity || !complete) {
+        stopCoach();
+        coachMessage = "";
+        latestFlight = identity;
+      }
+      const enabled = byId("voice-enabled").checked;
+      byId("voice-status").textContent = !enabled ? "Off"
+        : !voice.configured ? "Key not available on tracker"
+        : voice.status === "error" && complete ? voice.error
+        : voice.status === "generating" && complete ? "Preparing commentary…"
+        : coachMessage || "On · automatic commentary";
+      if (complete && voice.configured && enabled) {
+        if (voice.status === "idle" && requestedFlight !== identity) requestVoice();
+        if (voice.status === "ready" && playedFlight !== identity
+            && voice.flight_id === data.flight_id && voice.session_id === data.session_id && voice.score === data.score) {
+          playVoice(voice.audio_url, identity, data.score);
+        }
+      }
+    }
 
     function number(value, fallback = 0) {
       const result = Number(value);
       return Number.isFinite(result) ? result : fallback;
     }
 
-    function pointsString(points) {
-      return Array.isArray(points)
-        ? points.map((point) => `${number(point[0])},${number(point[1])}`).join(" ")
-        : "";
+    function validPoint(point) {
+      return Array.isArray(point) && point.length >= 2 &&
+        point.slice(0, 2).every(value => typeof value === "number" && Number.isFinite(value));
+    }
+
+    function pathString(points, width, height) {
+      let previous = null;
+      return points.map(point => {
+        if (!validPoint(point)) { previous = null; return ""; }
+        const jump = previous && Math.hypot(point[0] - previous[0], point[1] - previous[1]) > Math.hypot(width, height) * .3;
+        const command = previous && !jump ? "L" : "M";
+        previous = point;
+        return `${command}${point[0]},${point[1]}`;
+      }).join(" ");
     }
 
     function setConnection(online) {
@@ -345,59 +779,75 @@
     }
 
     function render(data) {
-      const width = Math.max(1, number(data.frame_width, 640));
-      const height = Math.max(1, number(data.frame_height, 480));
+      renderVoice(data);
+      const width = Math.max(160, number(data.frame_width, 640));
+      const height = Math.max(120, number(data.frame_height, 480));
       const groundY = height * 0.9;
       const trajectory = Array.isArray(data.trajectory) ? data.trajectory : [];
+      const measured = trajectory.filter(validPoint);
       const prediction = Array.isArray(data.prediction) ? data.prediction : [];
+      const padding = width * .065;
 
-      svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
-      byId("plot-wrap").style.aspectRatio = `${width} / ${height}`;
+      svg.setAttribute("viewBox", `${-padding} ${-padding} ${width + 2 * padding} ${height + 2 * padding}`);
+      byId("plot-wrap").style.aspectRatio = `${width + 2 * padding} / ${height + 2 * padding}`;
+      for (const id of ["camera-frame", "clip-frame"]) {
+        byId(id).setAttribute("width", width);
+        byId(id).setAttribute("height", height);
+      }
       byId("ground-line").setAttribute("x2", width);
       byId("ground-line").setAttribute("y1", groundY);
       byId("ground-line").setAttribute("y2", groundY);
-      byId("observed-line").setAttribute("points", pointsString(trajectory));
-      byId("predicted-line").setAttribute("points", pointsString(prediction));
+      byId("ground-line").setAttribute("stroke-dasharray", "4 7");
+      byId("observed-line").setAttribute("d", pathString(trajectory, width, height));
+      byId("predicted-line").setAttribute("d", pathString(prediction, width, height));
 
-      const current = trajectory.at(-1);
+      const current = measured.at(-1);
       const marker = byId("current-marker");
       marker.setAttribute("cx", current ? number(current[0]) : 0);
       marker.setAttribute("cy", current ? number(current[1]) : 0);
       marker.setAttribute("r", current ? Math.max(6, width * .009) : 0);
 
-      const landingX = data.landing_x === null ? null : number(data.landing_x);
+      const launch = measured[0];
+      byId("launch-marker").setAttribute("cx", launch?.[0] ?? 0);
+      byId("launch-marker").setAttribute("cy", launch?.[1] ?? 0);
+      byId("launch-marker").setAttribute("r", launch ? width * .008 : 0);
+      const landingX = typeof data.landing_x === "number" && Number.isFinite(data.landing_x) ? data.landing_x : null;
+      const endpoint = validPoint(data.forecast_endpoint) ? data.forecast_endpoint : prediction.filter(validPoint).at(-1);
       const confidence = Math.round(number(data.prediction_confidence));
       const landingZone = byId("landing-zone");
-      landingZone.setAttribute("cx", landingX ?? 0);
-      landingZone.setAttribute("cy", groundY);
-      landingZone.setAttribute("rx", landingX === null ? 0 : Math.max(width * .025, (100 - confidence) * width * .0025));
-      landingZone.setAttribute("ry", Math.max(8, height * .018));
+      landingZone.setAttribute("cx", endpoint?.[0] ?? 0);
+      landingZone.setAttribute("cy", endpoint?.[1] ?? 0);
+      landingZone.setAttribute("r", endpoint ? width * .012 : 0);
+      const labels = [];
+      function placeLabel(id, point, text, offset) {
+        const label = byId(id);
+        label.textContent = point ? text : "";
+        if (!point) return;
+        const x = Math.max(width * .1, Math.min(width * .9, point[0]));
+        let y = Math.max(16, Math.min(height - 8, point[1] + offset));
+        // Stack labels instead of overlapping when endpoints are close together.
+        for (let tries = 0; tries < 4 && labels.some(p => Math.abs(p[0] - x) < width * .22 && Math.abs(p[1] - y) < width * .035); tries++) {
+          y = y > height * .75 ? y - width * .045 : y + width * .045;
+        }
+        labels.push([x, y]);
+        label.setAttribute("x", x);
+        label.setAttribute("y", y);
+        label.style.fontSize = `${width * .021}px`;
+      }
+      placeLabel("launch-label", launch, "Launch", -width * .025);
+      placeLabel("endpoint-label", current, data.status === "COMPLETE" ? "Last seen" : "Tracking", width * .04);
+      placeLabel("landing-label", endpoint, data.forecast_kind === "exit" ? "Estimated exit" : data.forecast_kind === "landing" ? "Estimated landing" : "Forecast", -width * .025);
+      byId("remaining-label").textContent = data.forecast_kind === "exit" ? "Time to frame exit" : "Forecast time";
+      byId("landing-position-label").textContent = data.forecast_kind === "exit" ? "Frame exit position" : "Estimated landing";
 
-      const labelPadding = width * .045;
-      const labelY = Math.min(height - 10, groundY + Math.max(20, height * .045));
-      const launchX = trajectory.length
-        ? Math.max(labelPadding, Math.min(width - labelPadding, number(trajectory[0][0])))
-        : labelPadding;
-      const displayedLandingX = landingX === null ? width - labelPadding : landingX;
-      const clampedLandingX = Math.max(labelPadding, Math.min(width - labelPadding, displayedLandingX));
-      const labelSize = Math.max(13, Math.min(32, width * .018));
-      const launchLabel = byId("launch-label");
-      const landingLabel = byId("landing-label");
-      launchLabel.setAttribute("x", launchX);
-      launchLabel.setAttribute("y", labelY);
-      landingLabel.setAttribute("x", clampedLandingX);
-      landingLabel.setAttribute("y", labelY);
-      launchLabel.style.fontSize = `${labelSize}px`;
-      landingLabel.style.fontSize = `${labelSize}px`;
-
-      byId("empty-state").classList.toggle("hidden", trajectory.length > 1);
+      byId("empty-state").classList.toggle("hidden", measured.length > 1);
       byId("score").textContent = Math.round(number(data.score));
       byId("airtime").textContent = number(data.airtime).toFixed(2);
       byId("speed").textContent = Math.round(number(data.speed));
       byId("angle").textContent = Math.round(number(data.angle));
       byId("remaining").textContent = `${number(data.remaining_airtime).toFixed(2)} s`;
       byId("projected-distance").textContent = `${Math.round(number(data.projected_distance))} px`;
-      byId("landing-position").textContent = landingX === null ? "—" : `${Math.round(landingX)} px`;
+      byId("landing-position").textContent = data.forecast_kind === "exit" && endpoint ? `${Math.round(endpoint[0])} px` : landingX === null ? "—" : `${Math.round(landingX)} px`;
       byId("smoothness").textContent = `${Math.round(number(data.smoothness) * 100)}%`;
       byId("confidence-label").textContent = `${confidence}%`;
       byId("confidence-fill").style.width = `${Math.max(0, Math.min(100, confidence))}%`;
@@ -416,6 +866,7 @@
             ? "Flight complete—the graph is frozen. Press Space to arm the next throw."
             : "Press Space in the tracker to arm a flight.";
       byId("last-update").textContent = `Updated ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })}`;
+      renderComparisons();
     }
 
     async function refresh() {
@@ -423,16 +874,26 @@
         const response = await fetch("/api/state", { cache: "no-store" });
         if (!response.ok) throw new Error("Dashboard API unavailable");
         render(await response.json());
+        const key = latestData.status === "COMPLETE" ? flightKey(latestData) : latestData.session_id;
+        if (key !== historyPollKey) { historyPollKey = key; refreshHistory(); }
         failures = 0;
         setConnection(true);
       } catch (error) {
         failures += 1;
-        if (failures > 2) setConnection(false);
+        if (failures > 2) { setConnection(false); stopCoach(); }
       }
     }
 
-    refresh();
-    setInterval(refresh, 100);
+    async function poll() {
+      await refresh();
+      setTimeout(poll, 150);
+    }
+    poll();
+    async function pollHistory() {
+      await refreshHistory();
+      setTimeout(pollHistory, 3000);
+    }
+    pollHistory();
   </script>
 </body>
 </html>

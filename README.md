@@ -5,8 +5,8 @@
 Track a paper airplane, visualize its path, compare designs, and hear your results—all from **one laptop**.
 
 > Built at **HackPHS 2026** for the **“Into the Skies”** theme.
-> SkyTrace brings together computer vision, Arduino hardware, and an interactive flight lab.
-
+> [MLH] Best Use of Elevenlabs
+> General Best Use of Elevenlabs
 ## The idea
 
 Paper airplanes are easy to build, but their flights are hard to compare by eye.
